@@ -5,8 +5,43 @@ import { HumanModel } from './HumanModel';
 import { DetectedPerson, CalibrationPoint } from '../types';
 import { PITCH_LINES } from '../utils/homography';
 import * as THREE from 'three';
+import { PLYLoader } from 'three-stdlib';
+import { useLoader } from '@react-three/fiber';
 
 declare const cv: any;
+
+const PersonMesh = ({ url, color }: { url: string, color: string }) => {
+  const geometry = useLoader(PLYLoader, url);
+  
+  const clonedGeometry = useMemo(() => {
+    const geom = geometry.clone();
+    geom.computeBoundingBox();
+    const center = new THREE.Vector3();
+    geom.boundingBox?.getCenter(center);
+    geom.translate(-center.x, -center.y, -center.z);
+    
+    const size = new THREE.Vector3();
+    geom.boundingBox?.getSize(size);
+    const scale = 1.8 / size.y;
+    geom.scale(scale, scale, scale);
+    
+    geom.computeBoundingBox();
+    geom.translate(0, -geom.boundingBox!.min.y, 0);
+    
+    geom.computeVertexNormals();
+    return geom;
+  }, [geometry]);
+
+  return (
+    <mesh geometry={clonedGeometry}>
+      <meshStandardMaterial 
+        vertexColors={clonedGeometry.hasAttribute('color')} 
+        color={clonedGeometry.hasAttribute('color') ? undefined : color} 
+        roughness={0.6}
+      />
+    </mesh>
+  );
+};
 
 interface ThreeDViewportProps {
   selectedPerson: DetectedPerson | null;
@@ -114,106 +149,124 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({ selectedPerson, 
   const controlsRef = React.useRef<any>(null);
 
   const matchCameraToBroadcast = useCallback(() => {
-    if (!homographyMatrix || !cameraRef.current || !controlsRef.current || !containerRef.current) return;
+    if (!calibrationPoints || calibrationPoints.length < 4 || !cameraRef.current || !controlsRef.current || !containerRef.current) return;
 
-    const W = containerRef.current.clientWidth;
-    const H = containerRef.current.clientHeight;
-    if (W === 0 || H === 0) return;
+    try {
+      if (typeof cv !== 'undefined' && cv.solvePnP) {
+        const W = containerRef.current.clientWidth;
+        const H = containerRef.current.clientHeight;
+        if (W === 0 || H === 0) return;
+        
+        const objectPoints: number[] = [];
+        const imagePoints: number[] = [];
+        
+        calibrationPoints.forEach(p => {
+          objectPoints.push(p.worldX, p.worldY, 0);
+          imagePoints.push((p.imageX / 100) * W, (p.imageY / 100) * H);
+        });
 
-    // 1. Convert homography from percentages to pixels based on current viewport
-    const h_pct = homographyMatrix;
-    const h = [
-      h_pct[0] * W / 100, h_pct[1] * W / 100, h_pct[2] * W / 100,
-      h_pct[3] * H / 100, h_pct[4] * H / 100, h_pct[5] * H / 100,
-      h_pct[6],           h_pct[7],           h_pct[8]
-    ];
+        const objMat = cv.matFromArray(calibrationPoints.length, 1, cv.CV_32FC3, objectPoints);
+        const imgMat = cv.matFromArray(calibrationPoints.length, 1, cv.CV_32FC2, imagePoints);
 
-    // 2. Estimate focal length in pixels
-    const cx = W / 2;
-    const cy = H / 2;
+        // Estimate focal length based on viewport
+        const f = Math.max(W, H) * 1.2; 
+        const cx = W / 2;
+        const cy = H / 2;
+        
+        const camMat = cv.matFromArray(3, 3, cv.CV_64F, [
+          f, 0, cx,
+          0, f, cy,
+          0, 0, 1
+        ]);
+        const distCoeffs = cv.Mat.zeros(4, 1, cv.CV_64F);
 
-    const h11 = h[0] - cx * h[6];
-    const h12 = h[1] - cx * h[7];
-    const h21 = h[3] - cy * h[6];
-    const h22 = h[4] - cy * h[7];
-    const h31 = h[6];
-    const h32 = h[7];
+        const rvec = new cv.Mat();
+        const tvec = new cv.Mat();
 
-    let f2_1 = - (h11 * h12 + h21 * h22) / (h31 * h32);
-    let f2_2 = (h12 * h12 + h22 * h22 - h11 * h11 - h21 * h21) / (h31 * h31 - h32 * h32);
+        // Use SOLVEPNP_EPNP for better stability with planar points, fallback to ITERATIVE
+        let success = false;
+        try {
+           success = cv.solvePnP(objMat, imgMat, camMat, distCoeffs, rvec, tvec, false, cv.SOLVEPNP_EPNP);
+        } catch (e) {
+           success = cv.solvePnP(objMat, imgMat, camMat, distCoeffs, rvec, tvec, false, cv.SOLVEPNP_ITERATIVE);
+        }
 
-    let f = Math.max(W, H); // Default fallback
-    if (f2_1 > 0 && f2_2 > 0) {
-      f = Math.sqrt((f2_1 + f2_2) / 2);
-    } else if (f2_1 > 0) {
-      f = Math.sqrt(f2_1);
-    } else if (f2_2 > 0) {
-      f = Math.sqrt(f2_2);
+        if (success) {
+          const R = new cv.Mat();
+          cv.Rodrigues(rvec, R);
+          
+          const rData = R.data64F;
+          const tData = tvec.data64F;
+          
+          // Construct the transformation matrix from world to camera
+          const rotMatrix = new THREE.Matrix4().set(
+            rData[0], rData[1], rData[2], tData[0],
+            rData[3], rData[4], rData[5], tData[1],
+            rData[6], rData[7], rData[8], tData[2],
+            0, 0, 0, 1
+          );
+          
+          // We want Camera to World
+          const camToWorld = rotMatrix.clone().invert();
+          
+          // Extract camera position in world coordinates
+          const pos = new THREE.Vector3().setFromMatrixPosition(camToWorld);
+          
+          // Map to Three.js Scene
+          // World X -> Three X (-52.5 offset)
+          // World Y -> Three Z (-34 offset)
+          // World Z (up) -> Three Y
+          const finalPos = new THREE.Vector3(
+            pos.x - 52.5,
+            Math.abs(pos.z), // ensure above ground
+            pos.y - 34
+          );
+          
+          cameraRef.current.position.copy(finalPos);
+          
+          // Calculate lookAt target by projecting the center of the image to the ground plane
+          if (homographyMatrix) {
+            const h_pct = homographyMatrix;
+            const h = [
+              h_pct[0] * W / 100, h_pct[1] * W / 100, h_pct[2] * W / 100,
+              h_pct[3] * H / 100, h_pct[4] * H / 100, h_pct[5] * H / 100,
+              h_pct[6],           h_pct[7],           h_pct[8]
+            ];
+            const H_mat = new THREE.Matrix3().fromArray([
+              h[0], h[3], h[6],
+              h[1], h[4], h[7],
+              h[2], h[5], h[8]
+            ]);
+            const Hinv = H_mat.clone().invert();
+            const centerImg = new THREE.Vector3(cx, cy, 1);
+            const centerWorld = centerImg.applyMatrix3(Hinv);
+            const targetX = (centerWorld.x / centerWorld.z) - 52.5;
+            const targetZ = (centerWorld.y / centerWorld.z) - 34;
+            
+            cameraRef.current.lookAt(targetX, 0, targetZ);
+            
+            if (controlsRef.current) {
+              controlsRef.current.target.set(targetX, 0, targetZ);
+              controlsRef.current.update();
+            }
+          }
+          
+          // Update FOV
+          const estimatedFov = 2 * Math.atan((H / 2) / f) * (180 / Math.PI);
+          cameraRef.current.fov = estimatedFov;
+          cameraRef.current.aspect = W / H;
+          cameraRef.current.updateProjectionMatrix();
+
+          // Cleanup
+          objMat.delete(); imgMat.delete(); camMat.delete(); distCoeffs.delete();
+          rvec.delete(); tvec.delete(); R.delete();
+          return;
+        }
+      }
+    } catch (e) {
+      console.error("solvePnP failed", e);
     }
-
-    // 3. Intrinsic Matrix K
-    const K = new THREE.Matrix3().set(
-      f, 0, cx,
-      0, f, cy,
-      0, 0, 1
-    );
-    const Kinv = K.clone().invert();
-
-    // 4. Decompose H to R, t
-    const h1 = new THREE.Vector3(h[0], h[3], h[6]);
-    const h2 = new THREE.Vector3(h[1], h[4], h[7]);
-    const h3 = new THREE.Vector3(h[2], h[5], h[8]);
-
-    const v1 = h1.clone().applyMatrix3(Kinv);
-    const v2 = h2.clone().applyMatrix3(Kinv);
-
-    const lambda = 1 / v1.length();
-    const r1 = v1.multiplyScalar(lambda);
-    const r2 = v2.multiplyScalar(lambda);
-
-    const r3 = new THREE.Vector3().crossVectors(r1, r2).normalize();
-    const r2_adj = new THREE.Vector3().crossVectors(r3, r1).normalize();
-
-    const t = h3.clone().applyMatrix3(Kinv).multiplyScalar(lambda);
-
-    const rotMatrix = new THREE.Matrix4().makeBasis(r1, r2_adj, r3);
-
-    // 5. Camera Position in World
-    const R_T = rotMatrix.clone().extractRotation(rotMatrix).transpose();
-    const camPosWorld = t.clone().applyMatrix4(R_T).multiplyScalar(-1);
-
-    const finalPos = new THREE.Vector3(
-      camPosWorld.x - 52.5,
-      Math.abs(camPosWorld.z),
-      camPosWorld.y - 34
-    );
-
-    cameraRef.current.position.copy(finalPos);
-
-    // 6. Set FOV
-    const fov = 2 * Math.atan((H / 2) / f) * (180 / Math.PI);
-    cameraRef.current.fov = fov;
-    cameraRef.current.updateProjectionMatrix();
-
-    // 7. LookAt
-    const H_mat = new THREE.Matrix3().fromArray([
-      h[0], h[3], h[6],
-      h[1], h[4], h[7],
-      h[2], h[5], h[8]
-    ]);
-    const Hinv = H_mat.clone().invert();
-    const centerImg = new THREE.Vector3(cx, cy, 1);
-    const centerWorld = centerImg.applyMatrix3(Hinv);
-    const targetX = (centerWorld.x / centerWorld.z) - 52.5;
-    const targetZ = (centerWorld.y / centerWorld.z) - 34;
-
-    cameraRef.current.lookAt(targetX, 0, targetZ);
-
-    if (controlsRef.current) {
-      controlsRef.current.target.set(targetX, 0, targetZ);
-      controlsRef.current.update();
-    }
-  }, [homographyMatrix]);
+  }, [calibrationPoints, homographyMatrix]);
 
   return (
     <div ref={containerRef} className="w-full h-full bg-[#080808] relative overflow-hidden rounded-lg">
@@ -259,18 +312,26 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({ selectedPerson, 
               >
                 {isSelected ? (
                   <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
+                    {person.meshUrl ? (
+                      <PersonMesh url={person.meshUrl} color="#3b82f6" />
+                    ) : (
+                      <HumanModel 
+                        rotation={person.pose.rotation} 
+                        scale={1.8} 
+                        color="#3b82f6"
+                      />
+                    )}
+                  </Float>
+                ) : (
+                  person.meshUrl ? (
+                    <PersonMesh url={person.meshUrl} color="#444" />
+                  ) : (
                     <HumanModel 
                       rotation={person.pose.rotation} 
                       scale={1.8} 
-                      color="#3b82f6"
+                      color="#444" 
                     />
-                  </Float>
-                ) : (
-                  <HumanModel 
-                    rotation={person.pose.rotation} 
-                    scale={1.8} 
-                    color="#444" 
-                  />
+                  )
                 )}
                 
                 {/* Selection Indicator */}

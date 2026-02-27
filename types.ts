@@ -17,6 +17,7 @@ export interface DetectedPerson {
     activity: string;
   };
   worldPos?: [number, number]; // [x, y] in meters on the pitch
+  meshUrl?: string;
 }
 
 export interface CalibrationPoint {

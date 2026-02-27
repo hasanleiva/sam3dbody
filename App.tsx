@@ -4,13 +4,27 @@ import { SegmentStrip } from './components/SegmentStrip';
 import { ThreeDViewport } from './components/ThreeDViewport';
 import { CalibrationOverlay } from './components/CalibrationOverlay';
 import { MiniPitch } from './components/MiniPitch';
-import { analyzeImage } from './services/gemini';
-import { detectAndCropPlayers, cropImage } from './services/yoloService';
 import { AppState, DetectedPerson, CalibrationPoint } from './types';
 import { calculateHomography, CALIBRATION_NODES, projectPoint } from './utils/homography';
+import { fal } from '@fal-ai/client';
+
+const cropImage = (img: HTMLImageElement, x: number, y: number, width: number, height: number): Promise<string> => {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(img, x, y, width, height, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.8));
+    } else {
+      resolve('');
+    }
+  });
+};
 
 const App: React.FC = () => {
-  const [state, setState] = useState<AppState & { activeNodeId: string | null }>({
+  const [state, setState] = useState<AppState & { activeNodeId: string | null; scanProgress: number }>({
     image: null,
     detectedPeople: [],
     selectedId: null,
@@ -22,6 +36,7 @@ const App: React.FC = () => {
     error: null,
     activeNodeId: null,
     customNodes: [],
+    scanProgress: 0,
   });
 
   const [cvReady, setCvReady] = useState(false);
@@ -83,39 +98,7 @@ const App: React.FC = () => {
     const reader = new FileReader();
     reader.onload = async (e) => {
       const base64 = e.target?.result as string;
-      setState(prev => ({ ...prev, image: base64, isAnalyzing: true, detectedPeople: [], selectedId: null }));
-      
-      try {
-        // 1. Get Gemini analysis for scene metadata
-        const geminiResults = await analyzeImage(base64);
-        
-        // 2. Use TF.js/YOLO logic to generate real crops for thumbnails
-        const img = new Image();
-        img.src = base64;
-        await new Promise(resolve => img.onload = resolve);
-        
-        const enrichedResults = await Promise.all(geminiResults.map(async (person) => {
-          const [px, py, pw, ph] = person.bbox;
-          // Convert percentage to pixels
-          const x = (px / 100) * img.width;
-          const y = (py / 100) * img.height;
-          const w = (pw / 100) * img.width;
-          const h = (ph / 100) * img.height;
-          
-          const thumbnail = await cropImage(img, x, y, w, h);
-          return { ...person, thumbnail };
-        }));
-
-        setState(prev => ({ 
-          ...prev, 
-          detectedPeople: enrichedResults, 
-          selectedId: enrichedResults[0]?.id || null,
-          isAnalyzing: false 
-        }));
-      } catch (err) {
-        console.error(err);
-        setState(prev => ({ ...prev, error: "Analysis failed", isAnalyzing: false }));
-      }
+      setState(prev => ({ ...prev, image: base64, detectedPeople: [], selectedId: null, error: null }));
     };
     reader.readAsDataURL(file);
   }, []);
@@ -196,6 +179,102 @@ const App: React.FC = () => {
       };
     });
   }, [state.customNodes]);
+
+  const handleFalScan = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!state.image) return;
+    
+    const falKey = import.meta.env.VITE_FAL_KEY;
+    if (!falKey) {
+      setState(prev => ({ ...prev, error: "Please set VITE_FAL_KEY in your environment variables." }));
+      return;
+    }
+
+    // Configure fal client with the key
+    fal.config({
+      credentials: () => falKey,
+    });
+
+    setState(prev => ({ ...prev, isAnalyzing: true, scanProgress: 10 }));
+    
+    try {
+      // 1. Upload the base64 image to fal.ai's storage first
+      // The SAM 3D API requires a URL, so we upload the data URL to get a public URL
+      const file = await (await fetch(state.image)).blob();
+      const uploadedUrl = await fal.storage.upload(file);
+      
+      setState(prev => ({ ...prev, scanProgress: 30 }));
+
+      // 2. Call the SAM 3D Body API using the official client
+      const result: any = await fal.subscribe("fal-ai/sam-3/3d-body", {
+        input: {
+          image_url: uploadedUrl,
+        },
+        logs: true,
+        onQueueUpdate: (update) => {
+          if (update.status === "IN_PROGRESS") {
+            setState(s => ({ ...s, scanProgress: Math.min(90, s.scanProgress + 5) }));
+          }
+        },
+      });
+
+      const data = result;
+
+      const img = new Image();
+      img.src = state.image;
+      await new Promise(r => {
+        img.onload = r;
+        img.onerror = r;
+      });
+      const imgWidth = img.width || 1280;
+      const imgHeight = img.height || 720;
+
+      const newPeople: DetectedPerson[] = await Promise.all(data.metadata.people.map(async (p: any, idx: number) => {
+        const [x1, y1, x2, y2] = p.bbox;
+        const cx = ((x1 + x2) / 2 / imgWidth) * 100;
+        const bottomY = (y2 / imgHeight) * 100;
+
+        let worldPos: [number, number] | undefined;
+        if (state.homographyMatrix) {
+          const inverseH = calculateHomography(
+            state.calibrationPoints.map(cp => [cp.imageX, cp.imageY]),
+            state.calibrationPoints.map(cp => [cp.worldX, cp.worldY])
+          );
+          if (inverseH) {
+            const proj = projectPoint(cx, bottomY, inverseH);
+            if (!isNaN(proj[0]) && !isNaN(proj[1])) {
+              worldPos = proj as [number, number];
+            }
+          }
+        }
+
+        // Crop thumbnail
+        const thumbnail = await cropImage(img, x1, y1, x2 - x1, y2 - y1);
+
+        return {
+          id: `fal-${p.person_id}`,
+          name: `Player ${p.person_id + 1}`,
+          thumbnail,
+          confidence: 0.99,
+          box: [x1, y1, x2 - x1, y2 - y1],
+          bbox: [(x1 / imgWidth) * 100, (y1 / imgHeight) * 100, ((x2 - x1) / imgWidth) * 100, ((y2 - y1) / imgHeight) * 100] as [number, number, number, number],
+          worldPos,
+          pose: { rotation: [0, 0, 0], scale: 1, activity: "FAL 3D Body" },
+          meshUrl: data.meshes[idx]?.url
+        };
+      }));
+
+      setState(prev => ({ 
+        ...prev, 
+        detectedPeople: [...prev.detectedPeople, ...newPeople],
+        isAnalyzing: false,
+        scanProgress: 100
+      }));
+    } catch (err: any) {
+      console.error(err);
+      setState(prev => ({ ...prev, error: `Fal.ai Scan failed: ${err.message}`, isAnalyzing: false, scanProgress: 0 }));
+    }
+  };
 
   const selectedPerson = state.detectedPeople.find(p => p.id === state.selectedId) || null;
   const allNodes = [...CALIBRATION_NODES, ...state.customNodes];
@@ -343,44 +422,21 @@ const App: React.FC = () => {
 
                   <div className="absolute top-6 right-6 flex gap-2">
                     <button 
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (!state.image) return;
-                        setState(prev => ({ ...prev, isAnalyzing: true }));
-                        try {
-                          const img = new Image();
-                          img.src = state.image;
-                          await new Promise(resolve => img.onload = resolve);
-                          const yoloResults = await detectAndCropPlayers(img);
-                          
-                          // Convert YOLO results to DetectedPerson format
-                          const newPeople: DetectedPerson[] = yoloResults.map((res, i) => ({
-                            id: `yolo-${i}`,
-                            name: `Player ${i + 1}`,
-                            thumbnail: res.thumbnail,
-                            confidence: 0.95,
-                            bbox: res.bbox,
-                            pose: {
-                              rotation: [0, 0, 0],
-                              scale: 1,
-                              activity: "Detected by YOLO"
-                            }
-                          }));
-                          
-                          setState(prev => ({ 
-                            ...prev, 
-                            detectedPeople: [...prev.detectedPeople, ...newPeople],
-                            isAnalyzing: false 
-                          }));
-                        } catch (err) {
-                          console.error(err);
-                          setState(prev => ({ ...prev, error: "YOLO Scan failed", isAnalyzing: false }));
-                        }
-                      }}
-                      className="flex items-center gap-2.5 px-5 py-2.5 rounded-full text-sm font-bold border bg-black/60 border-white/10 text-white/90 hover:bg-black/80 transition-all shadow-xl backdrop-blur-md"
+                      onClick={handleFalScan}
+                      disabled={state.isAnalyzing}
+                      className="flex items-center gap-2.5 px-5 py-2.5 rounded-full text-sm font-bold border bg-black/60 border-white/10 text-white/90 hover:bg-black/80 transition-all shadow-xl backdrop-blur-md disabled:opacity-50"
                     >
-                      <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/></svg>
-                      YOLO SCAN
+                      {state.isAnalyzing ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+                          SCANNING {state.scanProgress}%
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/></svg>
+                          FAL.AI SCAN
+                        </>
+                      )}
                     </button>
                     <button 
                       onClick={(e) => { e.stopPropagation(); setState(prev => ({ ...prev, isCalibrating: !prev.isCalibrating })); }}

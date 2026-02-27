@@ -98,7 +98,18 @@ const App: React.FC = () => {
     const reader = new FileReader();
     reader.onload = async (e) => {
       const base64 = e.target?.result as string;
-      setState(prev => ({ ...prev, image: base64, detectedPeople: [], selectedId: null, error: null }));
+      const img = new Image();
+      img.onload = () => {
+        setState(prev => ({ 
+          ...prev, 
+          image: base64, 
+          imageDimensions: { width: img.width, height: img.height },
+          detectedPeople: [], 
+          selectedId: null, 
+          error: null 
+        }));
+      };
+      img.src = base64;
     };
     reader.readAsDataURL(file);
   }, []);
@@ -225,10 +236,10 @@ const App: React.FC = () => {
       }
 
       const img = new Image();
-      img.src = state.image;
-      await new Promise(r => {
-        img.onload = r;
-        img.onerror = r;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = state.image!;
       });
       const imgWidth = img.width || 1280;
       const imgHeight = img.height || 720;
@@ -380,51 +391,60 @@ const App: React.FC = () => {
                   <p className="text-sm text-[#555] mt-2">Upload a match photo to begin</p>
                 </label>
               ) : (
-                <div 
-                  className={`w-full h-full relative ${state.activeNodeId ? 'cursor-crosshair' : ''}`}
-                >
-                  <img src={state.image} className="w-full h-full object-contain pointer-events-none" alt="Source" />
-                  
-                  <CalibrationOverlay 
-                    isVisible={state.isCalibrating}
-                    points={state.calibrationPoints}
-                    customNodes={state.customNodes}
-                    matrix={state.homographyMatrix}
-                    onPointMove={updateCalibrationPoint}
-                    onNodeMap={handleNodeMap}
-                    onMapClick={handleImageClick}
-                  />
+                <>
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div 
+                      className={`relative ${state.activeNodeId ? 'cursor-crosshair' : ''}`}
+                    style={{
+                      aspectRatio: state.imageDimensions ? `${state.imageDimensions.width} / ${state.imageDimensions.height}` : 'auto',
+                      maxHeight: '100%',
+                      maxWidth: '100%'
+                    }}
+                  >
+                    <img src={state.image} className="w-full h-full block pointer-events-none" alt="Source" />
+                    
+                    <CalibrationOverlay 
+                      isVisible={state.isCalibrating}
+                      points={state.calibrationPoints}
+                      customNodes={state.customNodes}
+                      matrix={state.homographyMatrix}
+                      onPointMove={updateCalibrationPoint}
+                      onNodeMap={handleNodeMap}
+                      onMapClick={handleImageClick}
+                    />
 
-                  {/* Node Placement Prompt */}
-                  {state.activeNodeId && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="px-6 py-3 rounded-full bg-blue-600/90 text-white text-sm font-bold shadow-2xl animate-bounce backdrop-blur-md flex items-center gap-3">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}/></svg>
-                        PLACE {activeNode?.name.toUpperCase()}
+                    {/* Node Placement Prompt */}
+                    {state.activeNodeId && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="px-6 py-3 rounded-full bg-blue-600/90 text-white text-sm font-bold shadow-2xl animate-bounce backdrop-blur-md flex items-center gap-3">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}/></svg>
+                          PLACE {activeNode?.name.toUpperCase()}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {!state.isCalibrating && (
-                    <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                      {state.detectedPeople.map((person) => (
-                        <g key={person.id}>
-                          <rect 
-                            x={`${person.bbox[0]}%`} 
-                            y={`${person.bbox[1]}%`} 
-                            width={`${person.bbox[2]}%`} 
-                            height={`${person.bbox[3]}%`}
-                            fill={state.selectedId === person.id ? "rgba(59, 130, 246, 0.15)" : "transparent"}
-                            stroke={state.selectedId === person.id ? "#3b82f6" : "rgba(255,255,255,0.2)"}
-                            strokeWidth="2.5"
-                            className="transition-all duration-500"
-                          />
-                        </g>
-                      ))}
-                    </svg>
-                  )}
+                    {!state.isCalibrating && (
+                      <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                        {state.detectedPeople.map((person) => (
+                          <g key={person.id}>
+                            <rect 
+                              x={`${person.bbox[0]}%`} 
+                              y={`${person.bbox[1]}%`} 
+                              width={`${person.bbox[2]}%`} 
+                              height={`${person.bbox[3]}%`}
+                              fill={state.selectedId === person.id ? "rgba(59, 130, 246, 0.15)" : "transparent"}
+                              stroke={state.selectedId === person.id ? "#3b82f6" : "rgba(255,255,255,0.2)"}
+                              strokeWidth="2.5"
+                              className="transition-all duration-500"
+                            />
+                          </g>
+                        ))}
+                      </svg>
+                    )}
+                  </div>
+                </div>
 
-                  <div className="absolute top-6 right-6 flex gap-2">
+              <div className="absolute top-6 right-6 flex gap-2">
                     <button 
                       onClick={handleFalScan}
                       disabled={state.isAnalyzing}
@@ -450,7 +470,7 @@ const App: React.FC = () => {
                       {state.isCalibrating ? 'CALIBRATION MODE' : 'PLAYER VIEW'}
                     </button>
                   </div>
-                </div>
+                </>
               )}
             </div>
 

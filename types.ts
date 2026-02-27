@@ -30,6 +30,7 @@ export interface CalibrationPoint {
 
 export interface AppState {
   image: string | null;
+  imageDimensions?: { width: number; height: number } | null;
   detectedPeople: DetectedPerson[];
   selectedId: string | null;
   isAnalyzing: boolean;

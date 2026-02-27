@@ -218,7 +218,11 @@ const App: React.FC = () => {
         },
       });
 
-      const data = result;
+      const data = result.data || result;
+
+      if (!data || !data.metadata || !data.metadata.people) {
+        throw new Error("Invalid response format from fal.ai: Missing metadata.people");
+      }
 
       const img = new Image();
       img.src = state.image;

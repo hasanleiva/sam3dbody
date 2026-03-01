@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { db, storage } from '../firebase';
+import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../AuthContext';
 import { AppState } from '../types';
 
@@ -33,11 +32,25 @@ export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose,
     try {
       let imageUrl = state.image;
 
-      // If the image is a base64 string, upload it to Firebase Storage
+      // If the image is a base64 string, upload it to Cloudflare R2 via our backend
       if (imageUrl && imageUrl.startsWith('data:image')) {
-        const imageRef = ref(storage, `users/${user.uid}/scenes/${Date.now()}_image.jpg`);
-        await uploadString(imageRef, imageUrl, 'data_url');
-        imageUrl = await getDownloadURL(imageRef);
+        const token = await user.getIdToken();
+        const response = await fetch('/api/upload-image', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ image: imageUrl })
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || 'Failed to upload image to R2');
+        }
+
+        const data = await response.json();
+        imageUrl = data.url;
       }
 
       await addDoc(collection(db, 'users', user.uid, 'scenes'), {

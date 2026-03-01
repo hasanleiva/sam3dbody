@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
+import { getFirestore } from 'firebase/firestore';
 
 // Helper to remove trailing commas and surrounding quotes if accidentally included in env variables
 const cleanEnv = (val: string | undefined) => {
@@ -20,3 +21,4 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
+export const db = getFirestore(app);

@@ -7,6 +7,11 @@ import { MiniPitch } from './components/MiniPitch';
 import { AppState, DetectedPerson, CalibrationPoint } from './types';
 import { calculateHomography, CALIBRATION_NODES, projectPoint } from './utils/homography';
 import { fal } from '@fal-ai/client';
+import { useAuth } from './AuthContext';
+import { LoginModal } from './components/LoginModal';
+import { SaveSceneModal } from './components/SaveSceneModal';
+import { LoadSceneModal } from './components/LoadSceneModal';
+import { auth } from './firebase';
 
 const cropImage = (img: HTMLImageElement, x: number, y: number, width: number, height: number): Promise<string> => {
   return new Promise((resolve) => {
@@ -24,6 +29,11 @@ const cropImage = (img: HTMLImageElement, x: number, y: number, width: number, h
 };
 
 const App: React.FC = () => {
+  const { user } = useAuth();
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isSaveSceneModalOpen, setIsSaveSceneModalOpen] = useState(false);
+  const [isLoadSceneModalOpen, setIsLoadSceneModalOpen] = useState(false);
+
   const [state, setState] = useState<AppState & { activeNodeId: string | null; scanProgress: number }>({
     image: null,
     detectedPeople: [],
@@ -92,6 +102,11 @@ const App: React.FC = () => {
   }, [state.calibrationPoints, cvReady]);
 
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user) {
+      setIsLoginModalOpen(true);
+      return;
+    }
+
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -112,7 +127,7 @@ const App: React.FC = () => {
       img.src = base64;
     };
     reader.readAsDataURL(file);
-  }, []);
+  }, [user]);
 
   const handleImageClick = useCallback((x: number, y: number) => {
     if (!state.isCalibrating || !state.activeNodeId) return;
@@ -297,7 +312,27 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-[#050505] text-white overflow-hidden">
-      <Header />
+      <Header 
+        onLoginClick={() => setIsLoginModalOpen(true)}
+        onNewScene={() => {
+          setState({
+            image: null,
+            detectedPeople: [],
+            selectedId: null,
+            isAnalyzing: false,
+            isCalibrating: true,
+            calibrationPoints: [],
+            homographyMatrix: null,
+            inverseHomographyMatrix: null,
+            error: null,
+            activeNodeId: null,
+            customNodes: [],
+            scanProgress: 0,
+          });
+        }}
+        onSaveScene={() => setIsSaveSceneModalOpen(true)}
+        onLoadScene={() => setIsLoadSceneModalOpen(true)}
+      />
       
       <main className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left Sidebar */}
@@ -498,6 +533,34 @@ const App: React.FC = () => {
           </button>
         </div>
       )}
+
+      <LoginModal 
+        isOpen={isLoginModalOpen} 
+        onClose={() => setIsLoginModalOpen(false)} 
+      />
+      
+      <SaveSceneModal 
+        isOpen={isSaveSceneModalOpen} 
+        onClose={() => setIsSaveSceneModalOpen(false)} 
+        state={state}
+      />
+
+      <LoadSceneModal 
+        isOpen={isLoadSceneModalOpen} 
+        onClose={() => setIsLoadSceneModalOpen(false)} 
+        onLoad={(loadedState) => {
+          setState(prev => ({
+            ...prev,
+            ...loadedState,
+            // Reset some UI state
+            selectedId: null,
+            isAnalyzing: false,
+            error: null,
+            activeNodeId: null,
+            scanProgress: 0,
+          }));
+        }}
+      />
     </div>
   );
 };

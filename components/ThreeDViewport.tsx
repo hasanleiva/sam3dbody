@@ -1,6 +1,6 @@
-import React, { Suspense, useMemo, useCallback } from 'react';
+import React, { Suspense, useMemo, useCallback, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress } from '@react-three/drei';
 import { HumanModel } from './HumanModel';
 import { DetectedPerson, CalibrationPoint } from '../types';
 import { PITCH_LINES } from '../utils/homography';
@@ -9,6 +9,18 @@ import { PLYLoader } from 'three-stdlib';
 import { useLoader } from '@react-three/fiber';
 
 declare const cv: any;
+
+function Loader() {
+  const { active, progress } = useProgress();
+  if (!active) return null;
+  return (
+    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#080808] text-white">
+      <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
+      <p className="text-sm font-bold tracking-widest uppercase">Scene is loading</p>
+      <p className="text-xs text-white/50 mt-2">{Math.round(progress)}%</p>
+    </div>
+  );
+}
 
 const PersonMesh = ({ url, color }: { url: string, color: string }) => {
   const geometry = useLoader(PLYLoader, url);
@@ -270,6 +282,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({ selectedPerson, 
 
   return (
     <div ref={containerRef} className="w-full h-full bg-[#080808] relative overflow-hidden rounded-lg">
+      <Loader />
       <Canvas shadows dpr={[1, 2]}>
         <PerspectiveCamera 
           ref={cameraRef}

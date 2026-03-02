@@ -35,7 +35,9 @@ export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose,
       // If the image is a base64 string, upload it to Cloudflare R2 via our backend
       if (imageUrl && imageUrl.startsWith('data:image')) {
         const token = await user.getIdToken();
-        const response = await fetch('/api/upload-image', {
+        // Use the current origin for the API URL since the backend is hosted on the same domain
+        const apiUrl = window.location.origin;
+        const response = await fetch(`${apiUrl}/api/upload-image`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

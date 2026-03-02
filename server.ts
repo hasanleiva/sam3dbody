@@ -120,6 +120,33 @@ app.post("/api/upload-image", verifyToken, async (req: any, res: any) => {
   }
 });
 
+// Proxy image route to bypass CORS for Cloudflare R2 images
+app.get("/api/proxy-image", async (req: any, res: any) => {
+  try {
+    const imageUrl = req.query.url as string;
+    if (!imageUrl) {
+      return res.status(400).json({ error: "Missing url parameter" });
+    }
+
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      return res.status(response.status).json({ error: "Failed to fetch image" });
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "public, max-age=31536000");
+    res.send(buffer);
+  } catch (error: any) {
+    console.error("Proxy error:", error);
+    res.status(500).json({ error: error.message || "Failed to proxy image" });
+  }
+});
+
 // API Route to start Fal.ai integration securely on the backend
 app.post("/api/fal-scan/start", verifyToken, async (req: any, res: any) => {
   try {

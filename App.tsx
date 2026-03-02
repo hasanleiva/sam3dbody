@@ -224,10 +224,12 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, isAnalyzing: true, scanProgress: 10 }));
     
     try {
-      // 1. Upload the base64 image to fal.ai's storage first
-      // The SAM 3D API requires a URL, so we upload the data URL to get a public URL
-      const file = await (await fetch(state.image)).blob();
-      const uploadedUrl = await fal.storage.upload(file);
+      // 1. Upload the base64 image to fal.ai's storage first if it's not already a public URL
+      let uploadedUrl = state.image;
+      if (state.image.startsWith('data:image')) {
+        const file = await (await fetch(state.image)).blob();
+        uploadedUrl = await fal.storage.upload(file);
+      }
       
       setState(prev => ({ ...prev, scanProgress: 30 }));
 
@@ -251,10 +253,17 @@ const App: React.FC = () => {
       }
 
       const img = new Image();
+      img.crossOrigin = "anonymous";
       await new Promise((resolve, reject) => {
         img.onload = resolve;
-        img.onerror = reject;
-        img.src = state.image!;
+        img.onerror = () => reject(new Error("Failed to load image for cropping."));
+        // If it's a data URL, load it directly. If it's an external URL (like R2), proxy it to avoid CORS issues.
+        if (state.image!.startsWith('data:image')) {
+          img.src = state.image!;
+        } else {
+          const apiUrl = window.location.origin;
+          img.src = `${apiUrl}/api/proxy-image?url=${encodeURIComponent(state.image!)}`;
+        }
       });
       const imgWidth = img.width || 1280;
       const imgHeight = img.height || 720;

@@ -305,7 +305,8 @@ const App: React.FC = () => {
 
       setState(prev => ({ 
         ...prev, 
-        detectedPeople: [...prev.detectedPeople, ...newPeople],
+        // Remove previously detected fal.ai people to avoid duplicates
+        detectedPeople: [...prev.detectedPeople.filter(p => !p.id.startsWith('fal-')), ...newPeople],
         isAnalyzing: false,
         scanProgress: 100
       }));

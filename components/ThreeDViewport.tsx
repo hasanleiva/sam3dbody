@@ -71,6 +71,25 @@ const GoalNet: React.FC<{ position: [number, number, number], rotation: [number,
   const depthTop = 0.8;
   const postRadius = 0.06;
 
+  const sideGeo = useMemo(() => {
+    const geo = new THREE.PlaneGeometry(1, height, 10, 12);
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      
+      const y_norm = (y + height / 2) / height;
+      const currentDepth = depthBottom * (1 - y_norm) + depthTop * y_norm;
+      
+      const x_norm = x + 0.5;
+      const newX = -x_norm * currentDepth;
+      
+      pos.setX(i, newX);
+    }
+    geo.computeVertexNormals();
+    return geo;
+  }, [height, depthBottom, depthTop]);
+
   return (
     <group position={position} rotation={rotation}>
       {/* Goal Frame */}
@@ -90,73 +109,25 @@ const GoalNet: React.FC<{ position: [number, number, number], rotation: [number,
         <meshStandardMaterial color="white" roughness={0.2} metalness={0.8} />
       </mesh>
 
-      {/* Net Material */}
-      <meshStandardMaterial 
-        attach="material" 
-        color="#ffffff" 
-        transparent 
-        opacity={0.3} 
-        side={THREE.DoubleSide}
-        wireframe
-      />
-
       {/* Net - Back */}
-      <mesh position={[-(depthBottom + depthTop) / 2, height / 2, 0]} rotation={[0, Math.PI / 2, -Math.atan2(depthBottom - depthTop, height)]}>
-        <planeGeometry args={[width, Math.sqrt(height * height + (depthBottom - depthTop) * (depthBottom - depthTop))]} />
+      <mesh position={[-(depthBottom + depthTop) / 2, height / 2, 0]} rotation={[Math.atan2(depthBottom - depthTop, height), -Math.PI / 2, 0]}>
+        <planeGeometry args={[width, Math.sqrt(height * height + (depthBottom - depthTop) * (depthBottom - depthTop)), 36, 12]} />
         <meshStandardMaterial color="#ffffff" transparent opacity={0.3} side={THREE.DoubleSide} wireframe />
       </mesh>
 
       {/* Net - Top */}
-      <mesh position={[-depthTop / 2, height, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[depthTop, width]} />
+      <mesh position={[-depthTop / 2, height, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[depthTop, width, 4, 36]} />
         <meshStandardMaterial color="#ffffff" transparent opacity={0.3} side={THREE.DoubleSide} wireframe />
       </mesh>
 
       {/* Net - Left Side */}
-      <mesh position={[0, height / 2, width / 2]} rotation={[0, 0, 0]}>
-        <bufferGeometry>
-          <bufferAttribute
-            attach="attributes-position"
-            count={4}
-            array={new Float32Array([
-              0, height / 2, 0, // top front
-              -depthTop, height / 2, 0, // top back
-              0, -height / 2, 0, // bottom front
-              -depthBottom, -height / 2, 0, // bottom back
-            ])}
-            itemSize={3}
-          />
-          <bufferAttribute
-            attach="index"
-            count={6}
-            array={new Uint16Array([0, 1, 2, 1, 3, 2])}
-            itemSize={1}
-          />
-        </bufferGeometry>
+      <mesh position={[0, height / 2, width / 2]} geometry={sideGeo}>
         <meshStandardMaterial color="#ffffff" transparent opacity={0.3} side={THREE.DoubleSide} wireframe />
       </mesh>
 
       {/* Net - Right Side */}
-      <mesh position={[0, height / 2, -width / 2]} rotation={[0, 0, 0]}>
-        <bufferGeometry>
-          <bufferAttribute
-            attach="attributes-position"
-            count={4}
-            array={new Float32Array([
-              0, height / 2, 0, // top front
-              -depthTop, height / 2, 0, // top back
-              0, -height / 2, 0, // bottom front
-              -depthBottom, -height / 2, 0, // bottom back
-            ])}
-            itemSize={3}
-          />
-          <bufferAttribute
-            attach="index"
-            count={6}
-            array={new Uint16Array([0, 2, 1, 1, 2, 3])}
-            itemSize={1}
-          />
-        </bufferGeometry>
+      <mesh position={[0, height / 2, -width / 2]} geometry={sideGeo}>
         <meshStandardMaterial color="#ffffff" transparent opacity={0.3} side={THREE.DoubleSide} wireframe />
       </mesh>
     </group>

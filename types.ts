@@ -40,4 +40,5 @@ export interface AppState {
   inverseHomographyMatrix: number[] | null;
   error: string | null;
   customNodes: PitchNode[];
+  fullscreenView?: 'image' | '3d' | null;
 }

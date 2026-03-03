@@ -60,6 +60,8 @@ interface ThreeDViewportProps {
   allPeople: DetectedPerson[];
   homographyMatrix: number[] | null;
   calibrationPoints: CalibrationPoint[];
+  isFullscreen?: boolean;
+  onFullscreenToggle?: () => void;
 }
 
 const Pitch3D: React.FC = () => {
@@ -155,7 +157,14 @@ const Pitch3D: React.FC = () => {
   );
 };
 
-export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({ selectedPerson, allPeople, homographyMatrix, calibrationPoints }) => {
+export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({ 
+  selectedPerson, 
+  allPeople, 
+  homographyMatrix, 
+  calibrationPoints,
+  isFullscreen,
+  onFullscreenToggle
+}) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const cameraRef = React.useRef<THREE.PerspectiveCamera>(null);
   const controlsRef = React.useRef<any>(null);
@@ -368,6 +377,23 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({ selectedPerson, 
       </div>
 
       <div className="absolute top-4 right-4 flex gap-2">
+        {onFullscreenToggle && (
+          <button 
+            onClick={onFullscreenToggle}
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-black/40 border border-white/10 text-white/80 hover:bg-black/60 hover:text-white transition-all backdrop-blur-md"
+            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+          >
+            {isFullscreen ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9L4 4m5 5v-4m0 4H5m10 0l5-5m-5 5v-4m0 4h4M9 15l-5 5m5-5v4m0-4H5m10 0l5 5m-5-5v4m0-4h4" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+              </svg>
+            )}
+          </button>
+        )}
         <button 
           onClick={matchCameraToBroadcast}
           disabled={!homographyMatrix}

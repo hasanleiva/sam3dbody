@@ -423,7 +423,7 @@ const App: React.FC = () => {
           
           <div className="flex-1 flex overflow-hidden p-6 gap-6">
             {/* 2D Image Panel */}
-            <div className="flex-1 relative bg-[#111] rounded-xl border border-[#1a1a1a] overflow-hidden group shadow-2xl">
+            <div className={`relative bg-[#111] border border-[#1a1a1a] overflow-hidden group shadow-2xl ${state.fullscreenView === 'image' ? 'fixed inset-0 z-50 rounded-none' : 'flex-1 rounded-xl'}`}>
               {!state.image ? (
                 <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-[#151515] transition-all">
                   <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
@@ -491,6 +491,21 @@ const App: React.FC = () => {
 
               <div className="absolute top-6 right-6 flex gap-2">
                     <button 
+                      onClick={() => setState(prev => ({ ...prev, fullscreenView: prev.fullscreenView === 'image' ? null : 'image' }))}
+                      className="flex items-center justify-center w-10 h-10 rounded-full bg-black/60 border border-white/10 text-white/90 hover:bg-black/80 hover:text-white transition-all shadow-xl backdrop-blur-md"
+                      title={state.fullscreenView === 'image' ? "Exit Fullscreen" : "Fullscreen"}
+                    >
+                      {state.fullscreenView === 'image' ? (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9L4 4m5 5v-4m0 4H5m10 0l5-5m-5 5v-4m0 4h4M9 15l-5 5m5-5v4m0-4H5m10 0l5 5m-5-5v4m0-4h4" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                        </svg>
+                      )}
+                    </button>
+                    <button 
                       onClick={handleFalScan}
                       disabled={state.isAnalyzing}
                       className="flex items-center gap-2.5 px-5 py-2.5 rounded-full text-sm font-bold border bg-black/60 border-white/10 text-white/90 hover:bg-black/80 transition-all shadow-xl backdrop-blur-md disabled:opacity-50"
@@ -520,13 +535,15 @@ const App: React.FC = () => {
             </div>
 
             {/* 3D Viewport Panel */}
-            <div className="flex-1 flex flex-col min-w-0">
-              <div className="flex-1 rounded-xl border border-[#1a1a1a] overflow-hidden shadow-2xl relative">
+            <div className={`flex flex-col min-w-0 ${state.fullscreenView === '3d' ? 'fixed inset-0 z-50 bg-[#070707]' : 'flex-1'}`}>
+              <div className={`flex-1 overflow-hidden shadow-2xl relative ${state.fullscreenView === '3d' ? 'rounded-none border-none' : 'rounded-xl border border-[#1a1a1a]'}`}>
                 <ThreeDViewport 
                   selectedPerson={selectedPerson} 
                   allPeople={state.detectedPeople} 
                   homographyMatrix={state.homographyMatrix}
                   calibrationPoints={state.calibrationPoints}
+                  isFullscreen={state.fullscreenView === '3d'}
+                  onFullscreenToggle={() => setState(prev => ({ ...prev, fullscreenView: prev.fullscreenView === '3d' ? null : '3d' }))}
                 />
               </div>
             </div>

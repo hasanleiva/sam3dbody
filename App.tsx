@@ -423,7 +423,7 @@ const App: React.FC = () => {
           
           <div className="flex-1 flex overflow-hidden p-6 gap-6">
             {/* 2D Image Panel */}
-            <div className={`relative bg-[#111] border border-[#1a1a1a] overflow-hidden group shadow-2xl ${state.fullscreenView === 'image' ? 'fixed inset-0 z-50 rounded-none' : 'flex-1 rounded-xl'}`}>
+            <div className={`relative bg-[#111] border border-[#1a1a1a] overflow-hidden group shadow-2xl rounded-xl ${state.fullscreenView === '3d' ? 'hidden' : 'flex-1'}`}>
               {!state.image ? (
                 <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-[#151515] transition-all">
                   <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
@@ -535,8 +535,8 @@ const App: React.FC = () => {
             </div>
 
             {/* 3D Viewport Panel */}
-            <div className={`flex flex-col min-w-0 ${state.fullscreenView === '3d' ? 'fixed inset-0 z-50 bg-[#070707]' : 'flex-1'}`}>
-              <div className={`flex-1 overflow-hidden shadow-2xl relative ${state.fullscreenView === '3d' ? 'rounded-none border-none' : 'rounded-xl border border-[#1a1a1a]'}`}>
+            <div className={`flex flex-col min-w-0 ${state.fullscreenView === 'image' ? 'hidden' : 'flex-1'}`}>
+              <div className="flex-1 overflow-hidden shadow-2xl relative rounded-xl border border-[#1a1a1a]">
                 <ThreeDViewport 
                   selectedPerson={selectedPerson} 
                   allPeople={state.detectedPeople} 

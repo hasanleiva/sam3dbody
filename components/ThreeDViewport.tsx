@@ -110,10 +110,12 @@ const GoalNet: React.FC<{ position: [number, number, number], rotation: [number,
       </mesh>
 
       {/* Net - Back */}
-      <mesh position={[-(depthBottom + depthTop) / 2, height / 2, 0]} rotation={[Math.atan2(depthBottom - depthTop, height), -Math.PI / 2, 0]}>
-        <planeGeometry args={[width, Math.sqrt(height * height + (depthBottom - depthTop) * (depthBottom - depthTop)), 36, 12]} />
-        <meshStandardMaterial color="#ffffff" transparent opacity={0.3} side={THREE.DoubleSide} wireframe />
-      </mesh>
+      <group position={[-(depthBottom + depthTop) / 2, height / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <mesh rotation={[Math.atan2(depthBottom - depthTop, height), 0, 0]}>
+          <planeGeometry args={[width, Math.sqrt(height * height + (depthBottom - depthTop) * (depthBottom - depthTop)), 36, 12]} />
+          <meshStandardMaterial color="#ffffff" transparent opacity={0.3} side={THREE.DoubleSide} wireframe />
+        </mesh>
+      </group>
 
       {/* Net - Top */}
       <mesh position={[-depthTop / 2, height, 0]} rotation={[Math.PI / 2, 0, 0]}>

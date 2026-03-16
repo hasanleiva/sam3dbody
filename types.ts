@@ -18,6 +18,12 @@ export interface DetectedPerson {
   };
   worldPos?: [number, number]; // [x, y] in meters on the pitch
   meshUrl?: string;
+  colors?: {
+    jersey: string;
+    shorts: string;
+    socks: string;
+    body: string;
+  };
 }
 
 export interface CalibrationPoint {

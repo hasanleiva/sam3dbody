@@ -12,6 +12,7 @@ import { LoginModal } from './components/LoginModal';
 import { SaveSceneModal } from './components/SaveSceneModal';
 import { LoadSceneModal } from './components/LoadSceneModal';
 import { auth } from './firebase';
+import { extractColorsFromImage } from './utils/colorExtractor';
 
 const cropImage = (img: HTMLImageElement, x: number, y: number, width: number, height: number): Promise<string> => {
   return new Promise((resolve) => {
@@ -289,6 +290,9 @@ const App: React.FC = () => {
 
         // Crop thumbnail
         const thumbnail = await cropImage(img, x1, y1, x2 - x1, y2 - y1);
+        
+        // Extract colors from thumbnail
+        const colors = await extractColorsFromImage(thumbnail);
 
         return {
           id: `fal-${p.person_id}`,
@@ -299,7 +303,8 @@ const App: React.FC = () => {
           bbox: [(x1 / imgWidth) * 100, (y1 / imgHeight) * 100, ((x2 - x1) / imgWidth) * 100, ((y2 - y1) / imgHeight) * 100] as [number, number, number, number],
           worldPos,
           pose: { rotation: [0, 0, 0], scale: 1, activity: "FAL 3D Body" },
-          meshUrl: data.meshes[idx]?.url
+          meshUrl: data.meshes[idx]?.url,
+          colors
         };
       }));
 

@@ -22,7 +22,9 @@ function Loader() {
   );
 }
 
-const PersonMesh = ({ url, color }: { url: string, color: string }) => {
+import vertexMapping from '../vertex_mapping.json';
+
+const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors?: { jersey: string, shorts: string, socks: string, body: string } }) => {
   const geometry = useLoader(PLYLoader, url);
   
   const clonedGeometry = useMemo(() => {
@@ -40,9 +42,49 @@ const PersonMesh = ({ url, color }: { url: string, color: string }) => {
     geom.computeBoundingBox();
     geom.translate(0, -geom.boundingBox!.min.y, 0);
     
+    if (colors) {
+      const positionAttribute = geom.attributes.position;
+      const vertexColors = new Float32Array(positionAttribute.count * 3);
+      
+      const parseColor = (hexStr: string) => {
+        const c = new THREE.Color(hexStr);
+        return [c.r, c.g, c.b];
+      };
+      
+      const defaultColor = parseColor(color);
+      const jerseyColor = parseColor(colors.jersey);
+      const shortsColor = parseColor(colors.shorts);
+      const socksColor = parseColor(colors.socks);
+      const bodyColor = parseColor(colors.body);
+      
+      // Initialize with default color
+      for (let i = 0; i < positionAttribute.count; i++) {
+        vertexColors[i * 3] = defaultColor[0];
+        vertexColors[i * 3 + 1] = defaultColor[1];
+        vertexColors[i * 3 + 2] = defaultColor[2];
+      }
+      
+      const applyGroupColor = (indices: number[], col: number[]) => {
+        for (const idx of indices) {
+          if (idx < positionAttribute.count) {
+            vertexColors[idx * 3] = col[0];
+            vertexColors[idx * 3 + 1] = col[1];
+            vertexColors[idx * 3 + 2] = col[2];
+          }
+        }
+      };
+      
+      applyGroupColor(vertexMapping.body, bodyColor);
+      applyGroupColor(vertexMapping.jersey, jerseyColor);
+      applyGroupColor(vertexMapping.shorts, shortsColor);
+      applyGroupColor(vertexMapping.socks, socksColor);
+      
+      geom.setAttribute('color', new THREE.BufferAttribute(vertexColors, 3));
+    }
+    
     geom.computeVertexNormals();
     return geom;
-  }, [geometry]);
+  }, [geometry, colors, color]);
 
   return (
     <mesh geometry={clonedGeometry}>
@@ -411,7 +453,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
                 {isSelected ? (
                   <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
                     {person.meshUrl ? (
-                      <PersonMesh url={person.meshUrl} color="#3b82f6" />
+                      <PersonMesh url={person.meshUrl} color="#3b82f6" colors={person.colors} />
                     ) : (
                       <HumanModel 
                         rotation={person.pose.rotation} 
@@ -422,7 +464,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
                   </Float>
                 ) : (
                   person.meshUrl ? (
-                    <PersonMesh url={person.meshUrl} color="#444" />
+                    <PersonMesh url={person.meshUrl} color="#444" colors={person.colors} />
                   ) : (
                     <HumanModel 
                       rotation={person.pose.rotation} 

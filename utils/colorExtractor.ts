@@ -5,7 +5,7 @@ export const extractColorsFromImage = async (base64Image: string): Promise<{ jer
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       if (!ctx) {
-        resolve({ jersey: '#ffffff', shorts: '#ffffff', socks: '#ffffff', body: '#ffccaa' });
+        resolve({ jersey: '#ffffff', shorts: '#ffffff', socks: '#ffffff', body: '#acacac' });
         return;
       }
       
@@ -48,7 +48,7 @@ export const extractColorsFromImage = async (base64Image: string): Promise<{ jer
       
       // Heuristics for body parts based on vertical position
       // Face/Skin: top 5-15%
-      const body = getAverageColor(0.05, 0.15, 0.4, 0.6);
+      const body = '#acacac';
       // Jersey: 20-45%
       const jersey = getAverageColor(0.20, 0.45, 0.3, 0.7);
       // Shorts: 50-70%
@@ -59,7 +59,7 @@ export const extractColorsFromImage = async (base64Image: string): Promise<{ jer
       resolve({ jersey, shorts, socks, body });
     };
     img.onerror = () => {
-      resolve({ jersey: '#ffffff', shorts: '#ffffff', socks: '#ffffff', body: '#ffccaa' });
+      resolve({ jersey: '#ffffff', shorts: '#ffffff', socks: '#ffffff', body: '#acacac' });
     };
     img.src = base64Image;
   });

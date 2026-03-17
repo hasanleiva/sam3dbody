@@ -55,7 +55,7 @@ const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors
       const jerseyColor = parseColor(colors.jersey);
       const shortsColor = parseColor(colors.shorts);
       const socksColor = parseColor(colors.socks);
-      const bodyColor = parseColor(colors.body);
+      const bodyColor = parseColor('#acacac'); // Always use #acacac for body
       
       // Initialize with default color
       for (let i = 0; i < positionAttribute.count; i++) {

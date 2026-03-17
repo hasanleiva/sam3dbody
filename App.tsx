@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Header } from './components/Header';
 import { SegmentStrip } from './components/SegmentStrip';
 import { ThreeDViewport } from './components/ThreeDViewport';
@@ -111,23 +111,45 @@ const App: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const base64 = e.target?.result as string;
-      const img = new Image();
-      img.onload = () => {
-        setState(prev => ({ 
-          ...prev, 
-          image: base64, 
-          imageDimensions: { width: img.width, height: img.height },
-          detectedPeople: [], 
-          selectedId: null, 
-          error: null 
+    const isVideo = file.type.startsWith('video/');
+
+    if (isVideo) {
+      const videoUrl = URL.createObjectURL(file);
+      const video = document.createElement('video');
+      video.onloadedmetadata = () => {
+        setState(prev => ({
+          ...prev,
+          videoUrl,
+          mediaType: 'video',
+          image: null,
+          imageDimensions: { width: video.videoWidth, height: video.videoHeight },
+          detectedPeople: [],
+          selectedId: null,
+          error: null
         }));
       };
-      img.src = base64;
-    };
-    reader.readAsDataURL(file);
+      video.src = videoUrl;
+    } else {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          setState(prev => ({ 
+            ...prev, 
+            image: base64, 
+            mediaType: 'image',
+            videoUrl: null,
+            imageDimensions: { width: img.width, height: img.height },
+            detectedPeople: [], 
+            selectedId: null, 
+            error: null 
+          }));
+        };
+        img.src = base64;
+      };
+      reader.readAsDataURL(file);
+    }
   }, [user]);
 
   const handleImageClick = useCallback((x: number, y: number) => {
@@ -207,9 +229,25 @@ const App: React.FC = () => {
     });
   }, [state.customNodes]);
 
+  const videoRef = useRef<HTMLVideoElement>(null);
+
   const handleFalScan = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!state.image) return;
+    
+    let currentImage = state.image;
+    
+    if (state.mediaType === 'video' && videoRef.current) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        currentImage = canvas.toDataURL('image/jpeg', 0.9);
+      }
+    }
+
+    if (!currentImage) return;
     
     const falKey = import.meta.env.VITE_FAL_KEY;
     if (!falKey) {
@@ -222,13 +260,13 @@ const App: React.FC = () => {
       credentials: () => falKey,
     });
 
-    setState(prev => ({ ...prev, isAnalyzing: true, scanProgress: 10 }));
+    setState(prev => ({ ...prev, isAnalyzing: true, scanProgress: 10, image: currentImage }));
     
     try {
       // 1. Upload the base64 image to fal.ai's storage first if it's not already a public URL
-      let uploadedUrl = state.image;
-      if (state.image.startsWith('data:image')) {
-        const file = await (await fetch(state.image)).blob();
+      let uploadedUrl = currentImage;
+      if (currentImage.startsWith('data:image')) {
+        const file = await (await fetch(currentImage)).blob();
         uploadedUrl = await fal.storage.upload(file);
       }
       
@@ -259,11 +297,11 @@ const App: React.FC = () => {
         img.onload = resolve;
         img.onerror = () => reject(new Error("Failed to load image for cropping."));
         // If it's a data URL, load it directly. If it's an external URL (like R2), proxy it to avoid CORS issues.
-        if (state.image!.startsWith('data:image')) {
-          img.src = state.image!;
+        if (currentImage!.startsWith('data:image')) {
+          img.src = currentImage!;
         } else {
           const apiUrl = window.location.origin;
-          img.src = `${apiUrl}/api/proxy-image?url=${encodeURIComponent(state.image!)}`;
+          img.src = `${apiUrl}/api/proxy-image?url=${encodeURIComponent(currentImage!)}`;
         }
       });
       const imgWidth = img.width || 1280;
@@ -429,16 +467,16 @@ const App: React.FC = () => {
           <div className="flex-1 flex overflow-hidden p-6 gap-6">
             {/* 2D Image Panel */}
             <div className={`relative bg-[#111] border border-[#1a1a1a] overflow-hidden group shadow-2xl rounded-xl ${state.fullscreenView === '3d' ? 'hidden' : 'flex-1'}`}>
-              {!state.image ? (
+              {!state.image && !state.videoUrl ? (
                 <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-[#151515] transition-all">
-                  <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                  <input type="file" className="hidden" accept="image/*,video/*" onChange={handleFileUpload} />
                   <div className="p-8 rounded-3xl bg-blue-500/5 border border-blue-500/10 mb-6 group-hover:scale-110 transition-transform">
                     <svg className="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                   </div>
                   <p className="text-xl font-semibold tracking-tight">Broadcast View</p>
-                  <p className="text-sm text-[#555] mt-2">Upload a match photo to begin</p>
+                  <p className="text-sm text-[#555] mt-2">Upload a match photo or video to begin</p>
                 </label>
               ) : (
                 <>
@@ -451,7 +489,17 @@ const App: React.FC = () => {
                       maxWidth: '100%'
                     }}
                   >
-                    <img src={state.image} className="w-full h-full block pointer-events-none" alt="Source" />
+                    {state.mediaType === 'video' ? (
+                      <video 
+                        ref={videoRef}
+                        src={state.videoUrl!} 
+                        className="w-full h-full block" 
+                        controls
+                        crossOrigin="anonymous"
+                      />
+                    ) : (
+                      <img src={state.image!} className="w-full h-full block pointer-events-none" alt="Source" />
+                    )}
                     
                     <CalibrationOverlay 
                       isVisible={state.isCalibrating}
@@ -538,11 +586,11 @@ const App: React.FC = () => {
 
                   <div className="absolute bottom-6 right-6 flex gap-2">
                     <label className="flex items-center gap-2.5 px-5 py-2.5 rounded-full text-sm font-bold border bg-black/60 border-white/10 text-white/90 hover:bg-black/80 transition-all shadow-xl backdrop-blur-md cursor-pointer">
-                      <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                      <input type="file" className="hidden" accept="image/*,video/*" onChange={handleFileUpload} />
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                       </svg>
-                      CHANGE IMAGE
+                      CHANGE MEDIA
                     </label>
                   </div>
                 </>
@@ -594,6 +642,8 @@ const App: React.FC = () => {
           setState(prev => ({
             ...prev,
             ...loadedState,
+            mediaType: 'image',
+            videoUrl: null,
             // Reset some UI state
             selectedId: null,
             isAnalyzing: false,

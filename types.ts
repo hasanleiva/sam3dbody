@@ -36,6 +36,8 @@ export interface CalibrationPoint {
 
 export interface AppState {
   image: string | null;
+  videoUrl?: string | null;
+  mediaType?: 'image' | 'video' | null;
   imageDimensions?: { width: number; height: number } | null;
   detectedPeople: DetectedPerson[];
   selectedId: string | null;

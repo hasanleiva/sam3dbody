@@ -498,7 +498,12 @@ const App: React.FC = () => {
                         crossOrigin="anonymous"
                       />
                     ) : (
-                      <img src={state.image!} className="w-full h-full block pointer-events-none" alt="Source" />
+                      <img 
+                        src={state.image?.startsWith('http') ? `${window.location.origin}/api/proxy-image?url=${encodeURIComponent(state.image)}` : state.image!} 
+                        className="w-full h-full block pointer-events-none" 
+                        alt="Source" 
+                        referrerPolicy="no-referrer" 
+                      />
                     )}
                     
                     <CalibrationOverlay 

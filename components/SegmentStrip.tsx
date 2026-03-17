@@ -20,7 +20,12 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
             ${selectedId === person.id ? 'border-blue-500 scale-105 shadow-[0_0_15px_rgba(59,130,246,0.5)]' : 'border-transparent hover:border-[#333]'}
           `}
         >
-          <img src={person.thumbnail} alt={person.name} className="w-full h-full object-cover" />
+          <img 
+            src={person.thumbnail?.startsWith('http') ? `${window.location.origin}/api/proxy-image?url=${encodeURIComponent(person.thumbnail)}` : person.thumbnail} 
+            alt={person.name} 
+            className="w-full h-full object-cover" 
+            referrerPolicy="no-referrer" 
+          />
           <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-black/80 to-transparent flex items-end justify-center pb-1">
             <span className="text-[10px] text-white/80">{person.name}</span>
           </div>

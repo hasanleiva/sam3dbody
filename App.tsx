@@ -509,6 +509,7 @@ const App: React.FC = () => {
                       onPointMove={updateCalibrationPoint}
                       onNodeMap={handleNodeMap}
                       onMapClick={handleImageClick}
+                      activeNodeId={state.activeNodeId}
                     />
 
                     {/* Node Placement Prompt */}

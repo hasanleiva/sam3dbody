@@ -10,10 +10,11 @@ interface CalibrationOverlayProps {
   onNodeMap: (nodeId: string, x: number, y: number) => void;
   onMapClick: (x: number, y: number) => void;
   isVisible: boolean;
+  activeNodeId: string | null;
 }
 
 export const CalibrationOverlay: React.FC<CalibrationOverlayProps> = ({ 
-  points, customNodes, matrix, onPointMove, onNodeMap, onMapClick, isVisible 
+  points, customNodes, matrix, onPointMove, onNodeMap, onMapClick, isVisible, activeNodeId 
 }) => {
   const containerRef = useRef<SVGSVGElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -63,7 +64,7 @@ export const CalibrationOverlay: React.FC<CalibrationOverlayProps> = ({
       ref={containerRef}
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
-      className="absolute inset-0 w-full h-full touch-none pointer-events-auto"
+      className="absolute inset-0 w-full h-full touch-none pointer-events-none"
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
@@ -73,7 +74,7 @@ export const CalibrationOverlay: React.FC<CalibrationOverlayProps> = ({
         width="100" 
         height="100" 
         fill="transparent" 
-        className="pointer-events-auto cursor-crosshair"
+        className={activeNodeId ? "pointer-events-auto cursor-crosshair" : "pointer-events-none"}
         onPointerDown={(e) => {
           const rect = containerRef.current?.getBoundingClientRect();
           if (rect) {

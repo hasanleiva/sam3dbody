@@ -34,6 +34,11 @@ export interface CalibrationPoint {
   worldY: number; // meters 0-68
 }
 
+export interface DistanceMeasurement {
+  id: string;
+  points: [number, number, number][];
+}
+
 export interface AppState {
   image: string | null;
   videoUrl?: string | null;

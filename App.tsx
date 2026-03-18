@@ -4,7 +4,8 @@ import { SegmentStrip } from './components/SegmentStrip';
 import { ThreeDViewport } from './components/ThreeDViewport';
 import { CalibrationOverlay } from './components/CalibrationOverlay';
 import { MiniPitch } from './components/MiniPitch';
-import { AppState, DetectedPerson, CalibrationPoint } from './types';
+import { AnalysisTools } from './components/AnalysisTools';
+import { AppState, DetectedPerson, CalibrationPoint, DistanceMeasurement } from './types';
 import { calculateHomography, CALIBRATION_NODES, projectPoint } from './utils/homography';
 import { fal } from '@fal-ai/client';
 import { useAuth } from './AuthContext';
@@ -34,6 +35,9 @@ const App: React.FC = () => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSaveSceneModalOpen, setIsSaveSceneModalOpen] = useState(false);
   const [isLoadSceneModalOpen, setIsLoadSceneModalOpen] = useState(false);
+  const [activeAnalysisTool, setActiveAnalysisTool] = useState<'xg' | 'distance' | null>(null);
+  const [measurements, setMeasurements] = useState<DistanceMeasurement[]>([]);
+  const [activeMeasurementId, setActiveMeasurementId] = useState<string | null>(null);
 
   const [state, setState] = useState<AppState & { activeNodeId: string | null; scanProgress: number }>({
     image: null,
@@ -390,70 +394,91 @@ const App: React.FC = () => {
       <main className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left Sidebar */}
         <aside className="w-80 bg-[#090909] border-r border-[#1a1a1a] flex flex-col p-4 gap-6 overflow-y-auto no-scrollbar">
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xs font-bold text-[#888] uppercase tracking-wider">Manual Calibration</h3>
-              <div className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 text-[10px] font-bold border border-blue-500/20">
-                {state.calibrationPoints.length} POINTS
-              </div>
-            </div>
-            
-            <MiniPitch 
-              activeNodeId={state.activeNodeId}
-              mappedNodeIds={state.calibrationPoints.map(p => p.id)}
-              customNodes={state.customNodes}
-              onSelectNode={(id) => setState(prev => ({ ...prev, activeNodeId: id }))}
-              onAddCustomNode={handleAddCustomNode}
+          {state.fullscreenView === '3d' ? (
+            <AnalysisTools 
+              selectedPerson={selectedPerson}
+              activeTool={activeAnalysisTool}
+              setActiveTool={setActiveAnalysisTool}
+              measurements={measurements}
+              activeMeasurementId={activeMeasurementId}
+              setActiveMeasurementId={setActiveMeasurementId}
+              onClearMeasurement={(id) => {
+                setMeasurements(prev => prev.filter(m => m.id !== id));
+                if (activeMeasurementId === id) setActiveMeasurementId(null);
+              }}
+              onClearAllMeasurements={() => {
+                setMeasurements([]);
+                setActiveMeasurementId(null);
+              }}
             />
-            
-            <div className="mt-4 p-3 rounded bg-blue-500/5 border border-blue-500/10">
-              <p className="text-[11px] text-blue-400/80 leading-relaxed font-medium">
-                {state.activeNodeId 
-                  ? `NOW PLACING: ${activeNode?.name}. Click the location on the broadcast image below.`
-                  : "Select a point on the pitch map above to begin mapping it to the image."
-                }
-              </p>
-            </div>
-          </section>
-
-          <section className="flex-1 min-h-0 overflow-y-auto pr-2 no-scrollbar">
-            <h4 className="text-[10px] font-bold text-[#444] uppercase tracking-widest mb-3 flex items-center gap-2">
-              <div className="w-1 h-1 rounded-full bg-blue-500" />
-              Active Mappings
-            </h4>
-            <div className="space-y-1.5">
-              {state.calibrationPoints.length === 0 && (
-                <div className="text-[11px] text-[#333] py-8 text-center border border-dashed border-[#222] rounded-lg">
-                  No points mapped yet
-                </div>
-              )}
-              {state.calibrationPoints.map((p, i) => (
-                <div key={p.id} className="flex items-center justify-between bg-[#141414] p-2.5 rounded-lg group border border-transparent hover:border-blue-500/20 transition-all">
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <div className="w-5 h-5 rounded bg-blue-600/10 text-blue-500 text-[10px] font-bold flex items-center justify-center shrink-0 border border-blue-500/20">
-                      {i + 1}
-                    </div>
-                    <span className="text-[11px] truncate text-white/80 font-medium">
-                      {[...CALIBRATION_NODES, ...state.customNodes].find(n => n.id === p.id)?.name}
-                    </span>
+          ) : (
+            <>
+              <section>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xs font-bold text-[#888] uppercase tracking-wider">Manual Calibration</h3>
+                  <div className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 text-[10px] font-bold border border-blue-500/20">
+                    {state.calibrationPoints.length} POINTS
                   </div>
-                  <button 
-                    onClick={() => removeCalibrationPoint(p.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-red-500 hover:bg-red-500/10 rounded transition-all"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                  </button>
                 </div>
-              ))}
-            </div>
-          </section>
+                
+                <MiniPitch 
+                  activeNodeId={state.activeNodeId}
+                  mappedNodeIds={state.calibrationPoints.map(p => p.id)}
+                  customNodes={state.customNodes}
+                  onSelectNode={(id) => setState(prev => ({ ...prev, activeNodeId: id }))}
+                  onAddCustomNode={handleAddCustomNode}
+                />
+                
+                <div className="mt-4 p-3 rounded bg-blue-500/5 border border-blue-500/10">
+                  <p className="text-[11px] text-blue-400/80 leading-relaxed font-medium">
+                    {state.activeNodeId 
+                      ? `NOW PLACING: ${activeNode?.name}. Click the location on the broadcast image below.`
+                      : "Select a point on the pitch map above to begin mapping it to the image."
+                    }
+                  </p>
+                </div>
+              </section>
 
-          <button 
-            onClick={() => setState(prev => ({ ...prev, calibrationPoints: [], customNodes: [] }))}
-            className="w-full py-2.5 border border-red-900/20 text-red-500/40 hover:text-red-500 hover:bg-red-500/10 text-[10px] uppercase font-bold rounded-lg transition-all"
-          >
-            Clear All Data
-          </button>
+              <section className="flex-1 min-h-0 overflow-y-auto pr-2 no-scrollbar">
+                <h4 className="text-[10px] font-bold text-[#444] uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <div className="w-1 h-1 rounded-full bg-blue-500" />
+                  Active Mappings
+                </h4>
+                <div className="space-y-1.5">
+                  {state.calibrationPoints.length === 0 && (
+                    <div className="text-[11px] text-[#333] py-8 text-center border border-dashed border-[#222] rounded-lg">
+                      No points mapped yet
+                    </div>
+                  )}
+                  {state.calibrationPoints.map((p, i) => (
+                    <div key={p.id} className="flex items-center justify-between bg-[#141414] p-2.5 rounded-lg group border border-transparent hover:border-blue-500/20 transition-all">
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="w-5 h-5 rounded bg-blue-600/10 text-blue-500 text-[10px] font-bold flex items-center justify-center shrink-0 border border-blue-500/20">
+                          {i + 1}
+                        </div>
+                        <span className="text-[11px] truncate text-white/80 font-medium">
+                          {[...CALIBRATION_NODES, ...state.customNodes].find(n => n.id === p.id)?.name}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => removeCalibrationPoint(p.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-red-500 hover:bg-red-500/10 rounded transition-all"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <button 
+                onClick={() => setState(prev => ({ ...prev, calibrationPoints: [], customNodes: [] }))}
+                className="w-full py-2.5 border border-red-900/20 text-red-500/40 hover:text-red-500 hover:bg-red-500/10 text-[10px] uppercase font-bold rounded-lg transition-all"
+              >
+                Clear All Data
+              </button>
+            </>
+          )}
         </aside>
 
         {/* Viewports Container */}
@@ -613,6 +638,24 @@ const App: React.FC = () => {
                   calibrationPoints={state.calibrationPoints}
                   isFullscreen={state.fullscreenView === '3d'}
                   onFullscreenToggle={() => setState(prev => ({ ...prev, fullscreenView: prev.fullscreenView === '3d' ? null : '3d' }))}
+                  onSelectPerson={(id) => setState(prev => ({ ...prev, selectedId: id }))}
+                  onPitchClick={(point) => {
+                    if (activeAnalysisTool === 'distance') {
+                      setMeasurements(prev => {
+                        let active = prev.find(m => m.id === activeMeasurementId);
+                        
+                        if (!active || active.points.length >= 2) {
+                          const newId = Math.random().toString(36).substring(7);
+                          setActiveMeasurementId(newId);
+                          return [...prev, { id: newId, points: [point] }];
+                        } else {
+                          return prev.map(m => m.id === activeMeasurementId ? { ...m, points: [...m.points, point] } : m);
+                        }
+                      });
+                    }
+                  }}
+                  measurements={measurements}
+                  activeMeasurementId={activeMeasurementId}
                 />
               </div>
             </div>

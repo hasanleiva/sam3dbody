@@ -1,8 +1,8 @@
 import React, { Suspense, useMemo, useCallback, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress, Line, Text } from '@react-three/drei';
 import { HumanModel } from './HumanModel';
-import { DetectedPerson, CalibrationPoint } from '../types';
+import { DetectedPerson, CalibrationPoint, DistanceMeasurement } from '../types';
 import { PITCH_LINES } from '../utils/homography';
 import * as THREE from 'three';
 import { PLYLoader } from 'three-stdlib';
@@ -104,6 +104,10 @@ interface ThreeDViewportProps {
   calibrationPoints: CalibrationPoint[];
   isFullscreen?: boolean;
   onFullscreenToggle?: () => void;
+  onSelectPerson?: (id: string) => void;
+  onPitchClick?: (point: [number, number, number]) => void;
+  measurements?: DistanceMeasurement[];
+  activeMeasurementId?: string | null;
 }
 
 const GoalNet: React.FC<{ position: [number, number, number], rotation: [number, number, number] }> = ({ position, rotation }) => {
@@ -178,7 +182,7 @@ const GoalNet: React.FC<{ position: [number, number, number], rotation: [number,
   );
 };
 
-const Pitch3D: React.FC = () => {
+const Pitch3D: React.FC<{ onClick?: (point: [number, number, number]) => void }> = ({ onClick }) => {
   const pitchTexture = useMemo(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 2048;
@@ -253,13 +257,32 @@ const Pitch3D: React.FC = () => {
   return (
     <group>
       {/* Grass Surround (Outer) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
+      <mesh 
+        rotation={[-Math.PI / 2, 0, 0]} 
+        position={[0, -0.01, 0]} 
+        receiveShadow
+        onClick={(e) => {
+          if (onClick) {
+            e.stopPropagation();
+            onClick([e.point.x, e.point.y, e.point.z]);
+          }
+        }}
+      >
         <planeGeometry args={[125, 88]} />
         <meshStandardMaterial color="#1a331a" roughness={1} />
       </mesh>
 
       {/* Main Pitch with Texture */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <mesh 
+        rotation={[-Math.PI / 2, 0, 0]} 
+        receiveShadow
+        onClick={(e) => {
+          if (onClick) {
+            e.stopPropagation();
+            onClick([e.point.x, e.point.y, e.point.z]);
+          }
+        }}
+      >
         <planeGeometry args={[105, 68]} />
         <meshStandardMaterial 
           map={pitchTexture} 
@@ -281,7 +304,11 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
   homographyMatrix, 
   calibrationPoints,
   isFullscreen,
-  onFullscreenToggle
+  onFullscreenToggle,
+  onSelectPerson,
+  onPitchClick,
+  measurements,
+  activeMeasurementId
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const cameraRef = React.useRef<THREE.PerspectiveCamera>(null);
@@ -437,7 +464,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
         <Suspense fallback={null}>
           <Environment preset="night" />
           
-          <Pitch3D />
+          <Pitch3D onClick={onPitchClick} />
 
           {allPeople.map((person) => {
             if (!person.worldPos) return null;
@@ -449,6 +476,15 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
               <group 
                 key={person.id} 
                 position={[wx - 52.5, 0, wy - 34]}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onSelectPerson) {
+                    onSelectPerson(person.id);
+                  }
+                  if (onPitchClick) {
+                    onPitchClick([e.point.x, e.point.y, e.point.z]);
+                  }
+                }}
               >
                 {isSelected ? (
                   <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
@@ -480,6 +516,54 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
                     <ringGeometry args={[0.8, 1.0, 32]} />
                     <meshBasicMaterial color="#3b82f6" />
                   </mesh>
+                )}
+              </group>
+            );
+          })}
+
+          {measurements && measurements.map(m => {
+            if (m.points.length === 0) return null;
+            
+            const isActive = m.id === activeMeasurementId;
+            const color = isActive ? "#10b981" : "#059669";
+            
+            return (
+              <group key={m.id}>
+                {m.points.map((point, i) => (
+                  <mesh key={`dp-${m.id}-${i}`} position={point}>
+                    <sphereGeometry args={[0.3, 16, 16]} />
+                    <meshBasicMaterial color={color} />
+                  </mesh>
+                ))}
+                {m.points.length === 2 && (
+                  <group>
+                    <Line
+                      points={[m.points[0], m.points[1]]}
+                      color={color}
+                      lineWidth={9}
+                      transparent
+                      opacity={isActive ? 1 : 0.6}
+                    />
+                    <Text
+                      position={[
+                        (m.points[0][0] + m.points[1][0]) / 2,
+                        ((m.points[0][1] + m.points[1][1]) / 2) + 0.5,
+                        (m.points[0][2] + m.points[1][2]) / 2
+                      ]}
+                      color="#ef4444"
+                      fontSize={1.5}
+                      anchorX="center"
+                      anchorY="middle"
+                      rotation={[-Math.PI / 2, 0, 0]}
+                      outlineWidth={0.1}
+                      outlineColor="#000000"
+                    >
+                      {Math.sqrt(
+                        Math.pow(m.points[0][0] - m.points[1][0], 2) + 
+                        Math.pow(m.points[0][2] - m.points[1][2], 2)
+                      ).toFixed(1)}m
+                    </Text>
+                  </group>
                 )}
               </group>
             );

@@ -530,7 +530,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
             return (
               <group key={m.id}>
                 {m.points.map((point, i) => (
-                  <mesh key={`dp-${m.id}-${i}`} position={point}>
+                  <mesh key={`dp-${m.id}-${i}`} position={[point[0], 0.05, point[2]]}>
                     <sphereGeometry args={[0.3, 16, 16]} />
                     <meshBasicMaterial color={color} />
                   </mesh>
@@ -538,7 +538,10 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
                 {m.points.length === 2 && (
                   <group>
                     <Line
-                      points={[m.points[0], m.points[1]]}
+                      points={[
+                        [m.points[0][0], 0.05, m.points[0][2]],
+                        [m.points[1][0], 0.05, m.points[1][2]]
+                      ]}
                       color={color}
                       lineWidth={9}
                       transparent
@@ -547,7 +550,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
                     <Text
                       position={[
                         (m.points[0][0] + m.points[1][0]) / 2,
-                        ((m.points[0][1] + m.points[1][1]) / 2) + 0.5,
+                        0.55,
                         (m.points[0][2] + m.points[1][2]) / 2
                       ]}
                       color="#ef4444"

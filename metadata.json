@@ -1,5 +1,5 @@
 {
-  "name": "SAM 3D Playground",
+  "name": "REPLAYGRAM",
   "description": "A high-fidelity recreation of Meta's Segment Anything 3D body generation tool, allowing users to upload images, segment people, and view 3D reconstructions using Gemini for scene analysis.",
   "requestFramePermissions": [
     "camera"

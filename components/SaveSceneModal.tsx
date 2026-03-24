@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../AuthContext';
-import { AppState } from '../types';
+import { AppState, DistanceMeasurement } from '../types';
 
 interface SaveSceneModalProps {
   isOpen: boolean;
   onClose: () => void;
   state: AppState;
+  measurements: DistanceMeasurement[];
 }
 
-export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose, state }) => {
+export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose, state, measurements }) => {
   const { user } = useAuth();
   const [sceneName, setSceneName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -64,7 +65,8 @@ export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose,
           calibrationPoints: state.calibrationPoints,
           homographyMatrix: state.homographyMatrix,
           detectedPeople: state.detectedPeople,
-          customNodes: state.customNodes
+          customNodes: state.customNodes,
+          measurements: measurements
         }
       });
       onClose();

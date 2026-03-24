@@ -54,4 +54,5 @@ export interface AppState {
   error: string | null;
   customNodes: PitchNode[];
   fullscreenView?: 'image' | '3d' | null;
+  measurements?: DistanceMeasurement[];
 }

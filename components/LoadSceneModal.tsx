@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 import { useAuth } from '../AuthContext';
-import { AppState } from '../types';
+import { AppState, DistanceMeasurement } from '../types';
 
 interface LoadSceneModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoad: (state: Partial<AppState>) => void;
+  onLoad: (state: Partial<AppState>, measurements?: DistanceMeasurement[]) => void;
 }
 
 interface Scene {
@@ -15,6 +15,7 @@ interface Scene {
   name: string;
   createdAt: any;
   state: Partial<AppState>;
+  measurements?: DistanceMeasurement[];
 }
 
 export const LoadSceneModal: React.FC<LoadSceneModalProps> = ({ isOpen, onClose, onLoad }) => {
@@ -93,7 +94,7 @@ export const LoadSceneModal: React.FC<LoadSceneModalProps> = ({ isOpen, onClose,
               <div 
                 key={scene.id}
                 onClick={() => {
-                  onLoad(scene.state);
+                  onLoad(scene.state, scene.measurements || scene.state.measurements);
                   onClose();
                 }}
                 className="bg-[#f8f8f8] border border-[#eee] p-4 rounded-xl hover:bg-[#f0f0f0] hover:border-[#ddd] transition-all cursor-pointer flex items-center justify-between group"

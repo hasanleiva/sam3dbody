@@ -682,12 +682,13 @@ const App: React.FC = () => {
         isOpen={isSaveSceneModalOpen} 
         onClose={() => setIsSaveSceneModalOpen(false)} 
         state={state}
+        measurements={measurements}
       />
 
       <LoadSceneModal 
         isOpen={isLoadSceneModalOpen} 
         onClose={() => setIsLoadSceneModalOpen(false)} 
-        onLoad={(loadedState) => {
+        onLoad={(loadedState, loadedMeasurements) => {
           setState(prev => ({
             ...prev,
             ...loadedState,
@@ -700,6 +701,10 @@ const App: React.FC = () => {
             activeNodeId: null,
             scanProgress: 0,
           }));
+          if (loadedMeasurements) {
+            setMeasurements(loadedMeasurements);
+            setActiveMeasurementId(null);
+          }
         }}
       />
     </div>

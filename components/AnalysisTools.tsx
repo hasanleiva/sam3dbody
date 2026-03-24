@@ -85,7 +85,7 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
     <div className="flex flex-col h-full gap-6">
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xs font-bold text-[#888] uppercase tracking-wider">Analysis Tools</h3>
+          <h3 className="text-xs font-bold text-[#666] uppercase tracking-wider">Analysis Tools</h3>
         </div>
         
         <div className="space-y-3">
@@ -96,11 +96,11 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
             }}
             className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
               activeTool === 'xg' 
-                ? 'bg-blue-500/10 border-blue-500/50 text-blue-400' 
-                : 'bg-[#141414] border-white/5 text-white/70 hover:bg-white/5 hover:border-white/20'
+                ? 'bg-[#FC3434]/10 border-[#FC3434]/50 text-[#FC3434]' 
+                : 'bg-white border-[#eee] text-black/60 hover:bg-[#f5f5f5] hover:border-[#ddd]'
             }`}
           >
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${activeTool === 'xg' ? 'bg-blue-500/20' : 'bg-white/5'}`}>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${activeTool === 'xg' ? 'bg-[#FC3434]/20' : 'bg-[#f5f5f5]'}`}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
@@ -118,11 +118,11 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
             }}
             className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
               activeTool === 'distance' 
-                ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' 
-                : 'bg-[#141414] border-white/5 text-white/70 hover:bg-white/5 hover:border-white/20'
+                ? 'bg-[#FC3434]/10 border-[#FC3434]/50 text-[#FC3434]' 
+                : 'bg-white border-[#eee] text-black/60 hover:bg-[#f5f5f5] hover:border-[#ddd]'
             }`}
           >
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${activeTool === 'distance' ? 'bg-emerald-500/20' : 'bg-white/5'}`}>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${activeTool === 'distance' ? 'bg-[#FC3434]/20' : 'bg-[#f5f5f5]'}`}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
@@ -138,33 +138,33 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
       {/* Tool Content Area */}
       <section className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
         {activeTool === 'xg' && (
-          <div className="p-4 rounded-xl bg-[#141414] border border-white/5">
-            <h4 className="text-[10px] font-bold text-[#444] uppercase tracking-widest mb-4">xG Analysis</h4>
+          <div className="p-4 rounded-xl bg-white border border-[#eee] shadow-sm">
+            <h4 className="text-[10px] font-bold text-[#999] uppercase tracking-widest mb-4">xG Analysis</h4>
             
             {!selectedPerson ? (
-              <div className="text-xs text-white/50 text-center py-4">
+              <div className="text-xs text-black/40 text-center py-4">
                 Select a player in the 3D view to calculate xG.
               </div>
             ) : xgValue !== null ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-white/70">Selected Player</span>
-                  <span className="text-xs font-bold text-white">{selectedPerson.name}</span>
+                  <span className="text-xs text-black/60">Selected Player</span>
+                  <span className="text-xs font-bold text-black">{selectedPerson.name}</span>
                 </div>
                 
-                <div className="pt-4 border-t border-white/10">
-                  <div className="text-[10px] text-white/50 uppercase tracking-wider mb-1">Expected Goal (xG)</div>
-                  <div className="text-4xl font-bold text-blue-400">
+                <div className="pt-4 border-t border-[#eee]">
+                  <div className="text-[10px] text-black/40 uppercase tracking-wider mb-1">Expected Goal (xG)</div>
+                  <div className="text-4xl font-bold text-[#FC3434]">
                     {xgValue.toFixed(2)}
                   </div>
                 </div>
                 
-                <div className="text-[10px] text-white/40 leading-relaxed mt-4">
+                <div className="text-[10px] text-black/40 leading-relaxed mt-4">
                   Based on angle to goalposts and distance to goal center.
                 </div>
               </div>
             ) : (
-              <div className="text-xs text-white/50 text-center py-4">
+              <div className="text-xs text-black/40 text-center py-4">
                 Player position not available.
               </div>
             )}
@@ -172,13 +172,13 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
         )}
 
         {activeTool === 'distance' && (
-          <div className="p-4 rounded-xl bg-[#141414] border border-white/5">
+          <div className="p-4 rounded-xl bg-white border border-[#eee] shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="text-[10px] font-bold text-[#444] uppercase tracking-widest">Distance Measurements</h4>
+              <h4 className="text-[10px] font-bold text-[#999] uppercase tracking-widest">Distance Measurements</h4>
               {measurements.length > 0 && (
                 <button 
                   onClick={onClearAllMeasurements}
-                  className="text-[10px] text-red-500 hover:text-red-400 font-bold uppercase"
+                  className="text-[10px] text-[#FC3434] hover:text-[#e02e2e] font-bold uppercase"
                 >
                   Clear All
                 </button>
@@ -187,7 +187,7 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
             
             <div className="space-y-2 mb-4">
               {measurements.length === 0 && (
-                <div className="text-xs text-white/50 text-center py-4">
+                <div className="text-xs text-black/40 text-center py-4">
                   Click on the pitch to start measuring.
                 </div>
               )}
@@ -197,20 +197,20 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
                   onClick={() => setActiveMeasurementId(m.id)}
                   className={`p-2 rounded-lg border cursor-pointer transition-all flex justify-between items-center ${
                     m.id === activeMeasurementId 
-                      ? 'bg-emerald-500/10 border-emerald-500/30' 
-                      : 'bg-white/5 border-white/5 hover:bg-white/10'
+                      ? 'bg-[#FC3434]/10 border-[#FC3434]/30' 
+                      : 'bg-[#f8f8f8] border-[#eee] hover:bg-[#f0f0f0]'
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${m.points.length === 2 ? 'bg-emerald-500' : 'bg-emerald-500/50 animate-pulse'}`} />
-                    <span className="text-xs font-medium text-white/80">Measurement {i + 1}</span>
+                    <div className={`w-2 h-2 rounded-full ${m.points.length === 2 ? 'bg-[#FC3434]' : 'bg-[#FC3434]/50 animate-pulse'}`} />
+                    <span className="text-xs font-medium text-black/70">Measurement {i + 1}</span>
                   </div>
                   {m.points.length === 2 && (
-                    <span className="text-xs font-bold text-emerald-400">{calculateDistance(m.points).toFixed(1)}m</span>
+                    <span className="text-xs font-bold text-[#FC3434]">{calculateDistance(m.points).toFixed(1)}m</span>
                   )}
                   <button 
                     onClick={(e) => { e.stopPropagation(); onClearMeasurement(m.id); }}
-                    className="p-1 hover:bg-red-500/20 text-white/30 hover:text-red-400 rounded transition-colors"
+                    className="p-1 hover:bg-[#FC3434]/10 text-black/20 hover:text-[#FC3434] rounded transition-colors"
                   >
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
                   </button>
@@ -219,27 +219,27 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
             </div>
 
             {activeMeasurement && (
-              <div className="pt-4 border-t border-white/10">
+              <div className="pt-4 border-t border-[#eee]">
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${activeMeasurement.points.length >= 1 ? 'bg-emerald-500' : 'border border-white/20'}`} />
-                    <span className={`text-xs ${activeMeasurement.points.length >= 1 ? 'text-white' : 'text-white/50'}`}>
+                    <div className={`w-3 h-3 rounded-full ${activeMeasurement.points.length >= 1 ? 'bg-[#FC3434]' : 'border border-[#ddd]'}`} />
+                    <span className={`text-xs ${activeMeasurement.points.length >= 1 ? 'text-black' : 'text-black/40'}`}>
                       {activeMeasurement.points.length >= 1 ? 'Point 1 selected' : 'Click first point'}
                     </span>
                   </div>
                   
                   <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${activeMeasurement.points.length >= 2 ? 'bg-emerald-500' : 'border border-white/20'}`} />
-                    <span className={`text-xs ${activeMeasurement.points.length >= 2 ? 'text-white' : 'text-white/50'}`}>
+                    <div className={`w-3 h-3 rounded-full ${activeMeasurement.points.length >= 2 ? 'bg-[#FC3434]' : 'border border-[#ddd]'}`} />
+                    <span className={`text-xs ${activeMeasurement.points.length >= 2 ? 'text-black' : 'text-black/40'}`}>
                       {activeMeasurement.points.length >= 2 ? 'Point 2 selected' : 'Click second point'}
                     </span>
                   </div>
 
                   {activeMeasurement.points.length === 2 && (
                     <div className="mt-2">
-                      <div className="text-[10px] text-white/50 uppercase tracking-wider mb-1">Distance</div>
-                      <div className="text-3xl font-bold text-emerald-400">
-                        {calculateDistance(activeMeasurement.points).toFixed(1)} <span className="text-sm text-emerald-400/50">meters</span>
+                      <div className="text-[10px] text-black/40 uppercase tracking-wider mb-1">Distance</div>
+                      <div className="text-3xl font-bold text-[#FC3434]">
+                        {calculateDistance(activeMeasurement.points).toFixed(1)} <span className="text-sm text-[#FC3434]/50">meters</span>
                       </div>
                     </div>
                   )}
@@ -252,7 +252,7 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
                 const newId = Math.random().toString(36).substring(7);
                 setActiveMeasurementId(newId);
               }}
-              className="mt-4 w-full py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-bold rounded-lg transition-all"
+              className="mt-4 w-full py-2 bg-[#FC3434]/10 hover:bg-[#FC3434]/20 text-[#FC3434] border border-[#FC3434]/20 text-xs font-bold rounded-lg transition-all"
             >
               + New Measurement
             </button>

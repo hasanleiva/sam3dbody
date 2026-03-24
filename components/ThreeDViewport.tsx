@@ -14,10 +14,10 @@ function Loader() {
   const { active, progress } = useProgress();
   if (!active) return null;
   return (
-    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#080808] text-white">
-      <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
+    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#D7D7D7] text-black">
+      <div className="w-8 h-8 border-4 border-[#FC3434] border-t-transparent rounded-full animate-spin mb-4" />
       <p className="text-sm font-bold tracking-widest uppercase">Scene is loading</p>
-      <p className="text-xs text-white/50 mt-2">{Math.round(progress)}%</p>
+      <p className="text-xs text-black/40 mt-2">{Math.round(progress)}%</p>
     </div>
   );
 }
@@ -48,6 +48,10 @@ const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors
       
       const parseColor = (hexStr: string) => {
         const c = new THREE.Color(hexStr);
+        const hsl = { h: 0, s: 0, l: 0 };
+        c.getHSL(hsl);
+        // Boost saturation and lightness for more "colorful" look
+        c.setHSL(hsl.h, Math.min(1, hsl.s * 1.2), Math.min(1, hsl.l * 1.05));
         return [c.r, c.g, c.b];
       };
       
@@ -55,7 +59,7 @@ const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors
       const jerseyColor = parseColor(colors.jersey);
       const shortsColor = parseColor(colors.shorts);
       const socksColor = parseColor(colors.socks);
-      const bodyColor = parseColor('#acacac'); // Always use #acacac for body
+      const bodyColor = parseColor('#e0ac69'); // More natural skin tone for body
       
       // Initialize with default color
       for (let i = 0; i < positionAttribute.count; i++) {
@@ -87,11 +91,13 @@ const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors
   }, [geometry, colors, color]);
 
   return (
-    <mesh geometry={clonedGeometry}>
+    <mesh geometry={clonedGeometry} castShadow receiveShadow>
       <meshStandardMaterial 
         vertexColors={clonedGeometry.hasAttribute('color')} 
         color={clonedGeometry.hasAttribute('color') ? undefined : color} 
-        roughness={0.6}
+        roughness={0.4}
+        metalness={0.1}
+        envMapIntensity={1.2}
       />
     </mesh>
   );
@@ -191,7 +197,7 @@ const Pitch3D: React.FC<{ onClick?: (point: [number, number, number]) => void }>
     if (!ctx) return null;
 
     // Grass Base
-    ctx.fillStyle = '#2d5a27';
+    ctx.fillStyle = '#4a8c42';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Mown Grass Stripes
@@ -199,7 +205,7 @@ const Pitch3D: React.FC<{ onClick?: (point: [number, number, number]) => void }>
     const stripeWidth = canvas.width / stripeCount;
     for (let i = 0; i < stripeCount; i++) {
       if (i % 2 === 0) {
-        ctx.fillStyle = '#264d21';
+        ctx.fillStyle = '#3e7537';
         ctx.fillRect(i * stripeWidth, 0, stripeWidth, canvas.height);
       }
     }
@@ -269,7 +275,7 @@ const Pitch3D: React.FC<{ onClick?: (point: [number, number, number]) => void }>
         }}
       >
         <planeGeometry args={[125, 88]} />
-        <meshStandardMaterial color="#1a331a" roughness={1} />
+        <meshStandardMaterial color="#D7D7D7" roughness={1} />
       </mesh>
 
       {/* Main Pitch with Texture */}
@@ -435,9 +441,10 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
   }, [calibrationPoints, homographyMatrix]);
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-[#080808] relative overflow-hidden rounded-lg">
+    <div ref={containerRef} className="w-full h-full bg-[#D7D7D7] relative overflow-hidden rounded-lg">
       <Loader />
       <Canvas shadows dpr={[1, 2]}>
+        <color attach="background" args={['#D7D7D7']} />
         <PerspectiveCamera 
           ref={cameraRef}
           makeDefault 
@@ -452,17 +459,18 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
           target={[0, 0, 0]}
         />
         
-        <ambientLight intensity={0.4} />
+        <ambientLight intensity={0.8} />
         <directionalLight 
           position={[50, 50, 50]} 
-          intensity={1.2} 
+          intensity={1.5} 
           castShadow 
           shadow-mapSize={[1024, 1024]}
         />
-        <pointLight position={[-30, 20, -30]} intensity={0.5} />
+        <pointLight position={[-30, 20, -30]} intensity={0.8} />
 
         <Suspense fallback={null}>
-          <Environment preset="night" />
+          <Environment preset="city" />
+          <ContactShadows position={[0, 0, 0]} opacity={0.5} scale={120} blur={2.5} far={10} />
           
           <Pitch3D onClick={onPitchClick} />
 
@@ -489,23 +497,23 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
                 {isSelected ? (
                   <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
                     {person.meshUrl ? (
-                      <PersonMesh url={person.meshUrl} color="#3b82f6" colors={person.colors} />
+                      <PersonMesh url={person.meshUrl} color="#FC3434" colors={person.colors} />
                     ) : (
                       <HumanModel 
                         rotation={person.pose.rotation} 
                         scale={1.8} 
-                        color="#3b82f6"
+                        color="#FC3434"
                       />
                     )}
                   </Float>
                 ) : (
                   person.meshUrl ? (
-                    <PersonMesh url={person.meshUrl} color="#444" colors={person.colors} />
+                    <PersonMesh url={person.meshUrl} color="#999" colors={person.colors} />
                   ) : (
                     <HumanModel 
                       rotation={person.pose.rotation} 
                       scale={1.8} 
-                      color="#444" 
+                      color="#999" 
                     />
                   )
                 )}
@@ -514,7 +522,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
                 {isSelected && (
                   <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
                     <ringGeometry args={[0.8, 1.0, 32]} />
-                    <meshBasicMaterial color="#3b82f6" />
+                    <meshBasicMaterial color="#FC3434" />
                   </mesh>
                 )}
               </group>
@@ -576,16 +584,16 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
         </Suspense>
       </Canvas>
       
-      <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/5">
-        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-        <span className="text-[10px] font-bold text-white tracking-[0.2em] uppercase">Tactical Analysis View</span>
+      <div className="absolute top-4 left-4 flex items-center gap-2 bg-white/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-black/5">
+        <div className="w-2 h-2 rounded-full bg-[#FC3434] animate-pulse" />
+        <span className="text-[10px] font-bold text-black tracking-[0.2em] uppercase">Tactical Analysis View</span>
       </div>
 
       <div className="absolute top-4 right-4 flex gap-2">
         {onFullscreenToggle && (
           <button 
             onClick={onFullscreenToggle}
-            className="flex items-center justify-center w-8 h-8 rounded-full bg-black/40 border border-white/10 text-white/80 hover:bg-black/60 hover:text-white transition-all backdrop-blur-md"
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-white/40 border border-black/10 text-black/80 hover:bg-white/60 hover:text-black transition-all backdrop-blur-md"
             title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
           >
             {isFullscreen ? (
@@ -604,8 +612,8 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
           disabled={!homographyMatrix}
           className={`flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border shadow-lg backdrop-blur-md ${
             homographyMatrix 
-              ? 'bg-blue-600 border-blue-400 text-white hover:bg-blue-500' 
-              : 'bg-black/40 border-white/5 text-white/20 cursor-not-allowed'
+              ? 'bg-[#FC3434] border-[#FC3434] text-white hover:bg-[#e02e2e]' 
+              : 'bg-white/40 border-black/5 text-black/20 cursor-not-allowed'
           }`}
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -617,7 +625,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
       </div>
 
       <div className="absolute bottom-4 right-4 flex flex-col gap-2">
-         <div className="bg-black/40 backdrop-blur-md p-3 rounded-xl border border-white/10 text-[10px] text-white/60">
+         <div className="bg-white/40 backdrop-blur-md p-3 rounded-xl border border-black/10 text-[10px] text-black/60">
             <p>Pitch: 105m x 68m</p>
             <p>Units: Metric (Meters)</p>
          </div>

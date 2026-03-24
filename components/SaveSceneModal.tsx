@@ -76,18 +76,18 @@ export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose,
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-[#111] border border-white/10 p-8 rounded-2xl shadow-2xl w-full max-w-md relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white border border-[#eee] p-8 rounded-2xl shadow-2xl w-full max-w-md relative">
         <button 
           onClick={onClose}
-          className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors"
+          className="absolute top-4 right-4 text-black/30 hover:text-black transition-colors"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
 
-        <h2 className="text-2xl font-bold text-white mb-6">Save Scene</h2>
+        <h2 className="text-2xl font-bold text-black mb-6">Save Scene</h2>
 
         {error && (
           <div className="bg-red-500/10 border border-red-500/50 text-red-500 text-sm p-3 rounded-lg mb-4">
@@ -97,12 +97,12 @@ export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose,
 
         <form onSubmit={handleSave} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-white/70 mb-1">Scene Name</label>
+            <label className="block text-sm font-medium text-black/60 mb-1">Scene Name</label>
             <input 
               type="text" 
               value={sceneName}
               onChange={(e) => setSceneName(e.target.value)}
-              className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full bg-[#f8f8f8] border border-[#eee] rounded-lg px-4 py-2.5 text-black focus:outline-none focus:border-[#FC3434] transition-colors"
               placeholder="e.g. Match 1 - First Half"
               required
             />
@@ -110,7 +110,7 @@ export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose,
           <button 
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors disabled:opacity-50"
+            className="w-full bg-[#FC3434] hover:bg-[#e02e2e] text-white font-bold py-3 rounded-lg transition-colors disabled:opacity-50"
           >
             {loading ? 'Saving...' : 'Save Scene'}
           </button>

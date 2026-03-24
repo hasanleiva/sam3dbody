@@ -89,7 +89,7 @@ export const CalibrationOverlay: React.FC<CalibrationOverlayProps> = ({
       {matrix && (
         <g>
           {/* Lines */}
-          <g stroke="#ffdf00" strokeWidth="0.15" opacity="0.4" fill="none">
+          <g stroke="#FC3434" strokeWidth="0.15" opacity="0.4" fill="none">
             {PITCH_LINES.map((line, idx) => {
               try {
                 const p1 = projectPoint(line[0][0], line[0][1], matrix);
@@ -133,7 +133,7 @@ export const CalibrationOverlay: React.FC<CalibrationOverlayProps> = ({
             })}
           </g>
 
-          {/* Projected Nodes (Interactive Yellow Dots) */}
+          {/* Projected Nodes (Interactive Red Dots) */}
           <g>
             {[...CALIBRATION_NODES, ...customNodes].map((node) => {
               try {
@@ -142,7 +142,7 @@ export const CalibrationOverlay: React.FC<CalibrationOverlayProps> = ({
                 if (Math.abs(p[0]) > 200 || Math.abs(p[1]) > 200) return null; // Hide if far off-screen
                 
                 const isMapped = points.some(cp => cp.id === node.id);
-                if (isMapped) return null; // Already handled by blue handles
+                if (isMapped) return null; // Already handled by red handles
 
                 return (
                   <g 
@@ -156,8 +156,8 @@ export const CalibrationOverlay: React.FC<CalibrationOverlayProps> = ({
                       cx={p[0]} 
                       cy={p[1]} 
                       r="0.6" 
-                      fill="#ffdf00"
-                      stroke="black"
+                      fill="#FC3434"
+                      stroke="white"
                       strokeWidth="0.1"
                     />
                   </g>
@@ -186,7 +186,7 @@ export const CalibrationOverlay: React.FC<CalibrationOverlayProps> = ({
               cx={p.imageX} 
               cy={p.imageY} 
               r={isBeingDragged ? "1.5" : "1.2"} 
-              fill={isBeingDragged ? "rgba(59, 130, 246, 0.8)" : "rgba(59, 130, 246, 0.5)"}
+              fill={isBeingDragged ? "rgba(252, 52, 52, 0.8)" : "rgba(252, 52, 52, 0.5)"}
               stroke="white" 
               strokeWidth="0.2"
             />
@@ -197,7 +197,7 @@ export const CalibrationOverlay: React.FC<CalibrationOverlayProps> = ({
               dy="-2" 
               textAnchor="middle" 
               fontSize="1.5"
-              className="fill-blue-400 font-bold select-none drop-shadow-[0_0.2px_0.2px_rgba(0,0,0,0.8)]"
+              className="fill-[#FC3434] font-bold select-none drop-shadow-[0_0.2px_0.2px_rgba(255,255,255,0.8)]"
             >
               {nodeInfo?.name.split(' ').pop()}
             </text>

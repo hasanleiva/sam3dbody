@@ -68,11 +68,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#1a1a1a] rounded-xl border border-[#333] w-full max-w-md overflow-hidden shadow-2xl">
-        <div className="flex justify-between items-center p-4 border-b border-[#333]">
-          <h2 className="text-lg font-medium text-white">Settings</h2>
-          <button onClick={onClose} className="text-[#888] hover:text-white transition-colors">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-xl border border-[#eee] w-full max-w-md overflow-hidden shadow-2xl">
+        <div className="flex justify-between items-center p-4 border-b border-[#eee]">
+          <h2 className="text-lg font-medium text-black">Settings</h2>
+          <button onClick={onClose} className="text-black/30 hover:text-black transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -80,7 +80,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         </div>
         
         <div className="p-6">
-          <h3 className="text-md font-medium text-white mb-4">Change Password</h3>
+          <h3 className="text-md font-medium text-black mb-4">Change Password</h3>
           
           {error && (
             <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-500 text-sm">
@@ -96,34 +96,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
           <form onSubmit={handleChangePassword} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-[#888] mb-1">Current Password</label>
+              <label className="block text-sm font-medium text-black/60 mb-1">Current Password</label>
               <input
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full bg-[#090909] border border-[#333] rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                className="w-full bg-[#f8f8f8] border border-[#eee] rounded-lg px-3 py-2 text-black focus:outline-none focus:border-[#FC3434] transition-colors"
                 required
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-[#888] mb-1">New Password</label>
+              <label className="block text-sm font-medium text-black/60 mb-1">New Password</label>
               <input
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full bg-[#090909] border border-[#333] rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                className="w-full bg-[#f8f8f8] border border-[#eee] rounded-lg px-3 py-2 text-black focus:outline-none focus:border-[#FC3434] transition-colors"
                 required
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-[#888] mb-1">Confirm New Password</label>
+              <label className="block text-sm font-medium text-black/60 mb-1">Confirm New Password</label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full bg-[#090909] border border-[#333] rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                className="w-full bg-[#f8f8f8] border border-[#eee] rounded-lg px-3 py-2 text-black focus:outline-none focus:border-[#FC3434] transition-colors"
                 required
               />
             </div>
@@ -132,7 +132,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-2 rounded-lg bg-[#FC3434] text-white font-medium hover:bg-[#e02e2e] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? 'Updating...' : 'Update Password'}
               </button>

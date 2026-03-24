@@ -368,7 +368,7 @@ const App: React.FC = () => {
   const activeNode = allNodes.find(n => n.id === state.activeNodeId);
 
   return (
-    <div className="flex flex-col h-screen bg-[#050505] text-white overflow-hidden">
+    <div className="flex flex-col h-screen bg-white text-black overflow-hidden">
       <Header 
         onLoginClick={() => setIsLoginModalOpen(true)}
         onNewScene={() => {
@@ -393,7 +393,7 @@ const App: React.FC = () => {
       
       <main className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left Sidebar */}
-        <aside className="w-80 bg-[#090909] border-r border-[#1a1a1a] flex flex-col p-4 gap-6 overflow-y-auto no-scrollbar">
+        <aside className="w-80 bg-[#f8f8f8] border-r border-[#eee] flex flex-col p-4 gap-6 overflow-y-auto no-scrollbar">
           {state.fullscreenView === '3d' ? (
             <AnalysisTools 
               selectedPerson={selectedPerson}
@@ -415,8 +415,8 @@ const App: React.FC = () => {
             <>
               <section>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-bold text-[#888] uppercase tracking-wider">Manual Calibration</h3>
-                  <div className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 text-[10px] font-bold border border-blue-500/20">
+                  <h3 className="text-xs font-bold text-[#666] uppercase tracking-wider">Manual Calibration</h3>
+                  <div className="px-2 py-0.5 rounded bg-[#FC3434]/10 text-[#FC3434] text-[10px] font-bold border border-[#FC3434]/20">
                     {state.calibrationPoints.length} POINTS
                   </div>
                 </div>
@@ -429,8 +429,8 @@ const App: React.FC = () => {
                   onAddCustomNode={handleAddCustomNode}
                 />
                 
-                <div className="mt-4 p-3 rounded bg-blue-500/5 border border-blue-500/10">
-                  <p className="text-[11px] text-blue-400/80 leading-relaxed font-medium">
+                <div className="mt-4 p-3 rounded bg-[#FC3434]/5 border border-[#FC3434]/10">
+                  <p className="text-[11px] text-[#FC3434]/80 leading-relaxed font-medium">
                     {state.activeNodeId 
                       ? `NOW PLACING: ${activeNode?.name}. Click the location on the broadcast image below.`
                       : "Select a point on the pitch map above to begin mapping it to the image."
@@ -440,23 +440,23 @@ const App: React.FC = () => {
               </section>
 
               <section className="flex-1 min-h-0 overflow-y-auto pr-2 no-scrollbar">
-                <h4 className="text-[10px] font-bold text-[#444] uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <div className="w-1 h-1 rounded-full bg-blue-500" />
+                <h4 className="text-[10px] font-bold text-[#999] uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <div className="w-1 h-1 rounded-full bg-[#FC3434]" />
                   Active Mappings
                 </h4>
                 <div className="space-y-1.5">
                   {state.calibrationPoints.length === 0 && (
-                    <div className="text-[11px] text-[#333] py-8 text-center border border-dashed border-[#222] rounded-lg">
+                    <div className="text-[11px] text-[#999] py-8 text-center border border-dashed border-[#ddd] rounded-lg">
                       No points mapped yet
                     </div>
                   )}
                   {state.calibrationPoints.map((p, i) => (
-                    <div key={p.id} className="flex items-center justify-between bg-[#141414] p-2.5 rounded-lg group border border-transparent hover:border-blue-500/20 transition-all">
+                    <div key={p.id} className="flex items-center justify-between bg-white p-2.5 rounded-lg group border border-[#eee] hover:border-[#FC3434]/20 transition-all shadow-sm">
                       <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="w-5 h-5 rounded bg-blue-600/10 text-blue-500 text-[10px] font-bold flex items-center justify-center shrink-0 border border-blue-500/20">
+                        <div className="w-5 h-5 rounded bg-[#FC3434]/10 text-[#FC3434] text-[10px] font-bold flex items-center justify-center shrink-0 border border-[#FC3434]/20">
                           {i + 1}
                         </div>
-                        <span className="text-[11px] truncate text-white/80 font-medium">
+                        <span className="text-[11px] truncate text-black/80 font-medium">
                           {[...CALIBRATION_NODES, ...state.customNodes].find(n => n.id === p.id)?.name}
                         </span>
                       </div>
@@ -482,7 +482,7 @@ const App: React.FC = () => {
         </aside>
 
         {/* Viewports Container */}
-        <div className="flex-1 flex flex-col min-h-0 bg-[#070707]">
+        <div className="flex-1 flex flex-col min-h-0 bg-white">
           <SegmentStrip 
             people={state.detectedPeople} 
             selectedId={state.selectedId} 
@@ -491,17 +491,17 @@ const App: React.FC = () => {
           
           <div className="flex-1 flex overflow-hidden p-6 gap-6">
             {/* 2D Image Panel */}
-            <div className={`relative bg-[#111] border border-[#1a1a1a] overflow-hidden group shadow-2xl rounded-xl ${state.fullscreenView === '3d' ? 'hidden' : 'flex-1'}`}>
+            <div className={`relative bg-[#f5f5f5] border border-[#eee] overflow-hidden group shadow-lg rounded-xl ${state.fullscreenView === '3d' ? 'hidden' : 'flex-1'}`}>
               {!state.image && !state.videoUrl ? (
-                <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-[#151515] transition-all">
+                <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-[#eee] transition-all">
                   <input type="file" className="hidden" accept="image/*,video/*" onChange={handleFileUpload} />
-                  <div className="p-8 rounded-3xl bg-blue-500/5 border border-blue-500/10 mb-6 group-hover:scale-110 transition-transform">
-                    <svg className="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="p-8 rounded-3xl bg-[#FC3434]/5 border border-[#FC3434]/10 mb-6 group-hover:scale-110 transition-transform">
+                    <svg className="w-12 h-12 text-[#FC3434]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                   </div>
-                  <p className="text-xl font-semibold tracking-tight">Broadcast View</p>
-                  <p className="text-sm text-[#555] mt-2">Upload a match photo or video to begin</p>
+                  <p className="text-xl font-semibold tracking-tight text-black">Broadcast View</p>
+                  <p className="text-sm text-[#999] mt-2">Upload a match photo or video to begin</p>
                 </label>
               ) : (
                 <>
@@ -545,7 +545,7 @@ const App: React.FC = () => {
                     {/* Node Placement Prompt */}
                     {state.activeNodeId && (
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="px-6 py-3 rounded-full bg-blue-600/90 text-white text-sm font-bold shadow-2xl animate-bounce backdrop-blur-md flex items-center gap-3">
+                        <div className="px-6 py-3 rounded-full bg-[#FC3434]/90 text-white text-sm font-bold shadow-2xl animate-bounce backdrop-blur-md flex items-center gap-3">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}/></svg>
                           PLACE {activeNode?.name.toUpperCase()}
                         </div>
@@ -561,8 +561,8 @@ const App: React.FC = () => {
                               y={`${person.bbox[1]}%`} 
                               width={`${person.bbox[2]}%`} 
                               height={`${person.bbox[3]}%`}
-                              fill={state.selectedId === person.id ? "rgba(59, 130, 246, 0.15)" : "transparent"}
-                              stroke={state.selectedId === person.id ? "#3b82f6" : "rgba(255,255,255,0.2)"}
+                              fill={state.selectedId === person.id ? "rgba(252, 52, 52, 0.15)" : "transparent"}
+                              stroke={state.selectedId === person.id ? "#FC3434" : "rgba(0,0,0,0.2)"}
                               strokeWidth="2.5"
                               className="transition-all duration-500"
                             />
@@ -576,7 +576,7 @@ const App: React.FC = () => {
               <div className="absolute top-6 right-6 flex gap-2">
                     <button 
                       onClick={() => setState(prev => ({ ...prev, fullscreenView: prev.fullscreenView === 'image' ? null : 'image' }))}
-                      className="flex items-center justify-center w-10 h-10 rounded-full bg-black/60 border border-white/10 text-white/90 hover:bg-black/80 hover:text-white transition-all shadow-xl backdrop-blur-md"
+                      className="flex items-center justify-center w-10 h-10 rounded-full bg-white/80 border border-[#eee] text-black/80 hover:bg-white hover:text-black transition-all shadow-lg backdrop-blur-md"
                       title={state.fullscreenView === 'image' ? "Exit Fullscreen" : "Fullscreen"}
                     >
                       {state.fullscreenView === 'image' ? (
@@ -592,23 +592,23 @@ const App: React.FC = () => {
                     <button 
                       onClick={handleFalScan}
                       disabled={state.isAnalyzing}
-                      className="flex items-center gap-2.5 px-5 py-2.5 rounded-full text-sm font-bold border bg-black/60 border-white/10 text-white/90 hover:bg-black/80 transition-all shadow-xl backdrop-blur-md disabled:opacity-50"
+                      className="flex items-center gap-2.5 px-5 py-2.5 rounded-full text-sm font-bold border bg-white/80 border-[#eee] text-black/90 hover:bg-white transition-all shadow-lg backdrop-blur-md disabled:opacity-50"
                     >
                       {state.isAnalyzing ? (
                         <>
-                          <div className="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+                          <div className="w-4 h-4 border-2 border-[#FC3434] border-t-transparent rounded-full animate-spin" />
                           SCANNING {state.scanProgress}%
                         </>
                       ) : (
                         <>
-                          <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/></svg>
-                          FAL.AI SCAN
+                          <svg className="w-4 h-4 text-[#FC3434]" fill="currentColor" viewBox="0 0 20 20"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/></svg>
+                          SCAN
                         </>
                       )}
                     </button>
                     <button 
                       onClick={(e) => { e.stopPropagation(); setState(prev => ({ ...prev, isCalibrating: !prev.isCalibrating })); }}
-                      className={`flex items-center gap-2.5 px-5 py-2.5 rounded-full text-sm font-bold border transition-all shadow-xl backdrop-blur-md ${state.isCalibrating ? 'bg-blue-600 border-blue-400 text-white' : 'bg-black/60 border-white/10 text-white/90 hover:bg-black/80'}`}
+                      className={`flex items-center gap-2.5 px-5 py-2.5 rounded-full text-sm font-bold border transition-all shadow-lg backdrop-blur-md ${state.isCalibrating ? 'bg-[#FC3434] border-[#FC3434] text-white' : 'bg-white/80 border-[#eee] text-black/90 hover:bg-white'}`}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" /></svg>
                       {state.isCalibrating ? 'CALIBRATION MODE' : 'PLAYER VIEW'}
@@ -616,7 +616,7 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="absolute bottom-6 right-6 flex gap-2">
-                    <label className="flex items-center gap-2.5 px-5 py-2.5 rounded-full text-sm font-bold border bg-black/60 border-white/10 text-white/90 hover:bg-black/80 transition-all shadow-xl backdrop-blur-md cursor-pointer">
+                    <label className="flex items-center gap-2.5 px-5 py-2.5 rounded-full text-sm font-bold border bg-white/80 border-[#eee] text-black/90 hover:bg-white transition-all shadow-lg backdrop-blur-md cursor-pointer">
                       <input type="file" className="hidden" accept="image/*,video/*" onChange={handleFileUpload} />
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -630,7 +630,7 @@ const App: React.FC = () => {
 
             {/* 3D Viewport Panel */}
             <div className={`flex flex-col min-w-0 ${state.fullscreenView === 'image' ? 'hidden' : 'flex-1'}`}>
-              <div className="flex-1 overflow-hidden shadow-2xl relative rounded-xl border border-[#1a1a1a]">
+              <div className="flex-1 overflow-hidden shadow-lg relative rounded-xl border border-[#eee]">
                 <ThreeDViewport 
                   selectedPerson={selectedPerson} 
                   allPeople={state.detectedPeople} 

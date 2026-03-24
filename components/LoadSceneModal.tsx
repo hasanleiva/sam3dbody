@@ -14,8 +14,8 @@ interface Scene {
   id: string;
   name: string;
   createdAt: any;
-  state: Partial<AppState>;
-  measurements?: DistanceMeasurement[];
+  state: Partial<AppState> & { measurements?: string | DistanceMeasurement[] };
+  measurements?: string | DistanceMeasurement[];
 }
 
 export const LoadSceneModal: React.FC<LoadSceneModalProps> = ({ isOpen, onClose, onLoad }) => {
@@ -94,7 +94,20 @@ export const LoadSceneModal: React.FC<LoadSceneModalProps> = ({ isOpen, onClose,
               <div 
                 key={scene.id}
                 onClick={() => {
-                  onLoad(scene.state, scene.measurements || scene.state.measurements);
+                  let parsedMeasurements: DistanceMeasurement[] | undefined = undefined;
+                  const rawMeasurements = scene.measurements || scene.state.measurements;
+                  if (rawMeasurements) {
+                    if (typeof rawMeasurements === 'string') {
+                      try {
+                        parsedMeasurements = JSON.parse(rawMeasurements);
+                      } catch (e) {
+                        console.error('Failed to parse measurements', e);
+                      }
+                    } else {
+                      parsedMeasurements = rawMeasurements;
+                    }
+                  }
+                  onLoad(scene.state, parsedMeasurements);
                   onClose();
                 }}
                 className="bg-[#f8f8f8] border border-[#eee] p-4 rounded-xl hover:bg-[#f0f0f0] hover:border-[#ddd] transition-all cursor-pointer flex items-center justify-between group"

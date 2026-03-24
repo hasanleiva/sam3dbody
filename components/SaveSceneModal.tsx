@@ -66,7 +66,7 @@ export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose,
           homographyMatrix: state.homographyMatrix,
           detectedPeople: state.detectedPeople,
           customNodes: state.customNodes,
-          measurements: measurements
+          measurements: JSON.stringify(measurements)
         }
       });
       onClose();

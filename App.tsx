@@ -388,6 +388,11 @@ const App: React.FC = () => {
             customNodes: [],
             scanProgress: 0,
           });
+          setActiveAnalysisTool(null);
+          setMeasurements([]);
+          setActiveMeasurementId(null);
+          setOverlayEnabled(false);
+          setOverlayOpacity(0.5);
         }}
         onSaveScene={() => setIsSaveSceneModalOpen(true)}
         onLoadScene={() => setIsLoadSceneModalOpen(true)}
@@ -715,7 +720,13 @@ const App: React.FC = () => {
           if (loadedMeasurements) {
             setMeasurements(loadedMeasurements);
             setActiveMeasurementId(null);
+          } else {
+            setMeasurements([]);
+            setActiveMeasurementId(null);
           }
+          setActiveAnalysisTool(null);
+          setOverlayEnabled(false);
+          setOverlayOpacity(0.5);
         }}
       />
     </div>

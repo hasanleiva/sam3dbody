@@ -38,6 +38,8 @@ const App: React.FC = () => {
   const [activeAnalysisTool, setActiveAnalysisTool] = useState<'xg' | 'distance' | null>(null);
   const [measurements, setMeasurements] = useState<DistanceMeasurement[]>([]);
   const [activeMeasurementId, setActiveMeasurementId] = useState<string | null>(null);
+  const [overlayEnabled, setOverlayEnabled] = useState(false);
+  const [overlayOpacity, setOverlayOpacity] = useState(0.5);
 
   const [state, setState] = useState<AppState & { activeNodeId: string | null; scanProgress: number }>({
     image: null,
@@ -410,6 +412,10 @@ const App: React.FC = () => {
                 setMeasurements([]);
                 setActiveMeasurementId(null);
               }}
+              overlayEnabled={overlayEnabled}
+              setOverlayEnabled={setOverlayEnabled}
+              overlayOpacity={overlayOpacity}
+              setOverlayOpacity={setOverlayOpacity}
             />
           ) : (
             <>
@@ -636,6 +642,7 @@ const App: React.FC = () => {
                   allPeople={state.detectedPeople} 
                   homographyMatrix={state.homographyMatrix}
                   calibrationPoints={state.calibrationPoints}
+                  imageDimensions={state.imageDimensions}
                   isFullscreen={state.fullscreenView === '3d'}
                   onFullscreenToggle={() => setState(prev => ({ ...prev, fullscreenView: prev.fullscreenView === '3d' ? null : '3d' }))}
                   onSelectPerson={(id) => setState(prev => ({ ...prev, selectedId: id }))}
@@ -656,6 +663,10 @@ const App: React.FC = () => {
                   }}
                   measurements={measurements}
                   activeMeasurementId={activeMeasurementId}
+                  overlayEnabled={overlayEnabled}
+                  overlayOpacity={overlayOpacity}
+                  image={state.image}
+                  videoUrl={state.videoUrl}
                 />
               </div>
             </div>

@@ -10,6 +10,10 @@ interface AnalysisToolsProps {
   setActiveMeasurementId: (id: string | null) => void;
   onClearMeasurement: (id: string) => void;
   onClearAllMeasurements: () => void;
+  overlayEnabled: boolean;
+  setOverlayEnabled: (enabled: boolean) => void;
+  overlayOpacity: number;
+  setOverlayOpacity: (opacity: number) => void;
 }
 
 export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
@@ -20,7 +24,11 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
   activeMeasurementId,
   setActiveMeasurementId,
   onClearMeasurement,
-  onClearAllMeasurements
+  onClearAllMeasurements,
+  overlayEnabled,
+  setOverlayEnabled,
+  overlayOpacity,
+  setOverlayOpacity
 }) => {
   const [xgValue, setXgValue] = useState<number | null>(null);
 
@@ -258,6 +266,47 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
             </button>
           </div>
         )}
+      </section>
+
+      {/* Broadcast Overlay Tool */}
+      <section className="mt-4">
+        <div className="bg-white border border-[#eee] rounded-xl p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${overlayEnabled ? 'bg-[#FC3434]/20' : 'bg-[#f5f5f5]'}`}>
+                <svg className={`w-4 h-4 ${overlayEnabled ? 'text-[#FC3434]' : 'text-[#999]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-black">Broadcast Overlay</h3>
+                <div className="text-[10px] text-[#999]">Overlay media on 3D scene</div>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" className="sr-only peer" checked={overlayEnabled} onChange={(e) => setOverlayEnabled(e.target.checked)} />
+              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#FC3434]"></div>
+            </label>
+          </div>
+          
+          {overlayEnabled && (
+            <div className="mt-4 pt-4 border-t border-[#eee] space-y-2">
+              <div className="flex justify-between text-xs text-gray-500 font-medium">
+                <span>Opacity</span>
+                <span>{Math.round(overlayOpacity * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={overlayOpacity}
+                onChange={(e) => setOverlayOpacity(parseFloat(e.target.value))}
+                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#FC3434]"
+              />
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );

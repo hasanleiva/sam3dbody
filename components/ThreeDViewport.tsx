@@ -114,6 +114,11 @@ interface ThreeDViewportProps {
   onPitchClick?: (point: [number, number, number]) => void;
   measurements?: DistanceMeasurement[];
   activeMeasurementId?: string | null;
+  imageDimensions?: { width: number, height: number } | null;
+  overlayEnabled?: boolean;
+  overlayOpacity?: number;
+  image?: string | null;
+  videoUrl?: string | null;
 }
 
 const GoalNet: React.FC<{ position: [number, number, number], rotation: [number, number, number] }> = ({ position, rotation }) => {
@@ -314,7 +319,12 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
   onSelectPerson,
   onPitchClick,
   measurements,
-  activeMeasurementId
+  activeMeasurementId,
+  imageDimensions,
+  overlayEnabled,
+  overlayOpacity = 0.5,
+  image,
+  videoUrl
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const cameraRef = React.useRef<THREE.PerspectiveCamera>(null);
@@ -329,21 +339,26 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
         const H = containerRef.current.clientHeight;
         if (W === 0 || H === 0) return;
         
+        const imgW = imageDimensions ? imageDimensions.width : W;
+        const imgH = imageDimensions ? imageDimensions.height : H;
+        
         const objectPoints: number[] = [];
         const imagePoints: number[] = [];
         
         calibrationPoints.forEach(p => {
-          objectPoints.push(p.worldX, p.worldY, 0);
-          imagePoints.push((p.imageX / 100) * W, (p.imageY / 100) * H);
+          // Use Three.js world coordinates directly
+          // Center of pitch is 0,0,0. X goes from -52.5 to 52.5, Z goes from -34 to 34, Y is 0 (ground)
+          objectPoints.push(p.worldX - 52.5, 0, p.worldY - 34);
+          imagePoints.push((p.imageX / 100) * imgW, (p.imageY / 100) * imgH);
         });
 
         const objMat = cv.matFromArray(calibrationPoints.length, 1, cv.CV_32FC3, objectPoints);
         const imgMat = cv.matFromArray(calibrationPoints.length, 1, cv.CV_32FC2, imagePoints);
 
-        // Estimate focal length based on viewport
-        const f = Math.max(W, H) * 1.2; 
-        const cx = W / 2;
-        const cy = H / 2;
+        // Estimate focal length based on image dimensions
+        const f = Math.max(imgW, imgH) * 1.2; 
+        const cx = imgW / 2;
+        const cy = imgH / 2;
         
         const camMat = cv.matFromArray(3, 3, cv.CV_64F, [
           f, 0, cx,
@@ -370,62 +385,51 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
           const rData = R.data64F;
           const tData = tvec.data64F;
           
-          // Construct the transformation matrix from world to camera
-          const rotMatrix = new THREE.Matrix4().set(
+          // Construct the transformation matrix from world to OpenCV camera
+          const worldToCvCam = new THREE.Matrix4().set(
             rData[0], rData[1], rData[2], tData[0],
             rData[3], rData[4], rData[5], tData[1],
             rData[6], rData[7], rData[8], tData[2],
             0, 0, 0, 1
           );
           
-          // We want Camera to World
-          const camToWorld = rotMatrix.clone().invert();
+          // We want OpenCV Camera to World
+          const cvCamToWorld = worldToCvCam.clone().invert();
           
-          // Extract camera position in world coordinates
-          const pos = new THREE.Vector3().setFromMatrixPosition(camToWorld);
+          // OpenCV Camera (X right, Y down, Z forward) to Three.js Camera (X right, Y up, Z backward)
+          // We need to rotate 180 degrees around X axis.
+          const cvToThree = new THREE.Matrix4().makeRotationX(Math.PI);
           
-          // Map to Three.js Scene
-          // World X -> Three X (-52.5 offset)
-          // World Y -> Three Z (-34 offset)
-          // World Z (up) -> Three Y
-          const finalPos = new THREE.Vector3(
-            pos.x - 52.5,
-            Math.abs(pos.z), // ensure above ground
-            pos.y - 34
-          );
+          // Final Three.js Camera to World matrix
+          const threeCamToWorld = cvCamToWorld.multiply(cvToThree);
           
-          cameraRef.current.position.copy(finalPos);
+          // Apply to camera
+          threeCamToWorld.decompose(cameraRef.current.position, cameraRef.current.quaternion, cameraRef.current.scale);
           
-          // Calculate lookAt target by projecting the center of the image to the ground plane
-          if (homographyMatrix) {
-            const h_pct = homographyMatrix;
-            const h = [
-              h_pct[0] * W / 100, h_pct[1] * W / 100, h_pct[2] * W / 100,
-              h_pct[3] * H / 100, h_pct[4] * H / 100, h_pct[5] * H / 100,
-              h_pct[6],           h_pct[7],           h_pct[8]
-            ];
-            const H_mat = new THREE.Matrix3().fromArray([
-              h[0], h[3], h[6],
-              h[1], h[4], h[7],
-              h[2], h[5], h[8]
-            ]);
-            const Hinv = H_mat.clone().invert();
-            const centerImg = new THREE.Vector3(cx, cy, 1);
-            const centerWorld = centerImg.applyMatrix3(Hinv);
-            const targetX = (centerWorld.x / centerWorld.z) - 52.5;
-            const targetZ = (centerWorld.y / centerWorld.z) - 34;
-            
-            cameraRef.current.lookAt(targetX, 0, targetZ);
-            
+          // Set OrbitControls target by projecting the camera's forward vector to the ground plane
+          const lookAtVector = new THREE.Vector3(0, 0, -1).applyQuaternion(cameraRef.current.quaternion);
+          if (lookAtVector.y < 0) {
+            const t = -cameraRef.current.position.y / lookAtVector.y;
+            const target = cameraRef.current.position.clone().add(lookAtVector.multiplyScalar(t));
             if (controlsRef.current) {
-              controlsRef.current.target.set(targetX, 0, targetZ);
-              controlsRef.current.update();
+              controlsRef.current.target.copy(target);
+            }
+          } else {
+            // If looking up or parallel to ground, just set target a bit forward
+            const target = cameraRef.current.position.clone().add(lookAtVector.multiplyScalar(100));
+            if (controlsRef.current) {
+              controlsRef.current.target.copy(target);
             }
           }
           
-          // Update FOV
-          const estimatedFov = 2 * Math.atan((H / 2) / f) * (180 / Math.PI);
+          if (controlsRef.current) {
+            controlsRef.current.update();
+          }
+          
+          // Update FOV based on image height
+          const estimatedFov = 2 * Math.atan((imgH / 2) / f) * (180 / Math.PI);
           cameraRef.current.fov = estimatedFov;
+          // Keep the aspect ratio of the 3D viewport container so it doesn't stretch
           cameraRef.current.aspect = W / H;
           cameraRef.current.updateProjectionMatrix();
 
@@ -438,7 +442,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
     } catch (e) {
       console.error("solvePnP failed", e);
     }
-  }, [calibrationPoints, homographyMatrix]);
+  }, [calibrationPoints, imageDimensions]);
 
   return (
     <div ref={containerRef} className="w-full h-full bg-[#D7D7D7] relative overflow-hidden rounded-lg">
@@ -583,13 +587,36 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
           <ContactShadows opacity={0.6} scale={120} blur={2} far={10} resolution={512} color="#000" />
         </Suspense>
       </Canvas>
+
+      {/* Broadcast Overlay */}
+      {overlayEnabled && (image || videoUrl) && (
+        <div 
+          className="absolute inset-0 pointer-events-none flex items-center justify-center z-10"
+          style={{ opacity: overlayOpacity }}
+        >
+          {image ? (
+            <img 
+              src={image.startsWith('http') ? `${window.location.origin}/api/proxy-image?url=${encodeURIComponent(image)}` : image} 
+              className="w-full h-full object-contain" 
+              alt="Broadcast Overlay"
+              referrerPolicy="no-referrer"
+            />
+          ) : videoUrl ? (
+            <video 
+              src={videoUrl} 
+              className="w-full h-full object-contain" 
+              crossOrigin="anonymous"
+            />
+          ) : null}
+        </div>
+      )}
       
-      <div className="absolute top-4 left-4 flex items-center gap-2 bg-white/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-black/5">
+      <div className="absolute top-4 left-4 flex items-center gap-2 bg-white/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-black/5 z-20">
         <div className="w-2 h-2 rounded-full bg-[#FC3434] animate-pulse" />
         <span className="text-[10px] font-bold text-black tracking-[0.2em] uppercase">Tactical Analysis View</span>
       </div>
 
-      <div className="absolute top-4 right-4 flex gap-2">
+      <div className="absolute top-4 right-4 flex gap-2 z-20">
         {onFullscreenToggle && (
           <button 
             onClick={onFullscreenToggle}

@@ -8,6 +8,12 @@ interface HumanModelProps {
   rotation?: [number, number, number];
   scale?: number;
   color?: string;
+  colors?: {
+    jersey: string;
+    shorts: string;
+    socks: string;
+    body: string;
+  };
 }
 
 const Bone: React.FC<{ start: [number, number, number], end: [number, number, number], color: string }> = ({ start, end, color }) => {
@@ -28,7 +34,7 @@ const Bone: React.FC<{ start: [number, number, number], end: [number, number, nu
   );
 };
 
-export const HumanModel: React.FC<HumanModelProps> = ({ rotation = [0, 0, 0], scale = 1, color = "#60a5fa" }) => {
+export const HumanModel: React.FC<HumanModelProps> = ({ rotation = [0, 0, 0], scale = 1, color = "#60a5fa", colors }) => {
   const group = useRef<THREE.Group>(null);
 
   useFrame((state) => {
@@ -37,44 +43,49 @@ export const HumanModel: React.FC<HumanModelProps> = ({ rotation = [0, 0, 0], sc
     }
   });
 
+  const bodyColor = colors?.body || color;
+  const jerseyColor = colors?.jersey || color;
+  const shortsColor = colors?.shorts || color;
+  const socksColor = colors?.socks || color;
+
   return (
     <group ref={group} rotation={rotation} scale={scale}>
       {/* Head */}
       <Sphere args={[0.15, 16, 16]} position={[0, 1.7, 0]}>
-        <meshStandardMaterial color={color} />
+        <meshStandardMaterial color={bodyColor} />
       </Sphere>
       
-      {/* Torso */}
+      {/* Torso (Jersey) */}
       <Box args={[0.3, 0.6, 0.15]} position={[0, 1.3, 0]}>
-        <meshStandardMaterial color={color} />
+        <meshStandardMaterial color={jerseyColor} />
       </Box>
 
-      {/* Pelvis */}
+      {/* Pelvis (Shorts) */}
       <Box args={[0.3, 0.1, 0.15]} position={[0, 1.0, 0]}>
-        <meshStandardMaterial color={color} />
+        <meshStandardMaterial color={shortsColor} />
       </Box>
 
-      {/* Arms */}
+      {/* Arms (Body) */}
       <group position={[-0.2, 1.5, 0]} rotation={[0, 0, 0.3]}>
         <Cylinder args={[0.04, 0.04, 0.5]} position={[0, -0.25, 0]}>
-          <meshStandardMaterial color={color} />
+          <meshStandardMaterial color={bodyColor} />
         </Cylinder>
       </group>
       <group position={[0.2, 1.5, 0]} rotation={[0, 0, -0.3]}>
         <Cylinder args={[0.04, 0.04, 0.5]} position={[0, -0.25, 0]}>
-          <meshStandardMaterial color={color} />
+          <meshStandardMaterial color={bodyColor} />
         </Cylinder>
       </group>
 
-      {/* Legs */}
+      {/* Legs (Socks) */}
       <group position={[-0.1, 1.0, 0]} rotation={[0, 0, 0.1]}>
         <Cylinder args={[0.05, 0.05, 0.8]} position={[0, -0.4, 0]}>
-          <meshStandardMaterial color={color} />
+          <meshStandardMaterial color={socksColor} />
         </Cylinder>
       </group>
       <group position={[0.1, 1.0, 0]} rotation={[0, 0, -0.1]}>
         <Cylinder args={[0.05, 0.05, 0.8]} position={[0, -0.4, 0]}>
-          <meshStandardMaterial color={color} />
+          <meshStandardMaterial color={socksColor} />
         </Cylinder>
       </group>
 

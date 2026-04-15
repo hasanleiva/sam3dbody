@@ -3,8 +3,10 @@ import { DetectedPerson, DistanceMeasurement } from '../types';
 
 interface AnalysisToolsProps {
   selectedPerson: DetectedPerson | null;
-  activeTool: 'xg' | 'distance' | null;
-  setActiveTool: (tool: 'xg' | 'distance' | null) => void;
+  activeTool: 'xg' | 'distance' | 'transform' | null;
+  setActiveTool: (tool: 'xg' | 'distance' | 'transform' | null) => void;
+  transformMode: 'translate' | 'rotate';
+  setTransformMode: (mode: 'translate' | 'rotate') => void;
   measurements: DistanceMeasurement[];
   activeMeasurementId: string | null;
   setActiveMeasurementId: (id: string | null) => void;
@@ -20,6 +22,8 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
   selectedPerson,
   activeTool,
   setActiveTool,
+  transformMode,
+  setTransformMode,
   measurements,
   activeMeasurementId,
   setActiveMeasurementId,
@@ -97,6 +101,28 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
         </div>
         
         <div className="space-y-3">
+          {/* Transform Tool */}
+          <button
+            onClick={() => {
+              setActiveTool(activeTool === 'transform' ? null : 'transform');
+            }}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
+              activeTool === 'transform' 
+                ? 'bg-[#FC3434]/10 border-[#FC3434]/50 text-[#FC3434]' 
+                : 'bg-white border-[#eee] text-black/60 hover:bg-[#f5f5f5] hover:border-[#ddd]'
+            }`}
+          >
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${activeTool === 'transform' ? 'bg-[#FC3434]/20' : 'bg-[#f5f5f5]'}`}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+              </svg>
+            </div>
+            <div className="text-left">
+              <div className="text-sm font-bold">Transform / Rotate</div>
+              <div className="text-[10px] opacity-70">Move and rotate selected body</div>
+            </div>
+          </button>
+
           {/* Geometrik xG Tool */}
           <button
             onClick={() => {
@@ -145,6 +171,49 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
 
       {/* Tool Content Area */}
       <section className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
+        {activeTool === 'transform' && (
+          <div className="p-4 rounded-xl bg-white border border-[#eee] shadow-sm">
+            <h4 className="text-[10px] font-bold text-[#999] uppercase tracking-widest mb-4">Transform Controls</h4>
+            
+            {!selectedPerson ? (
+              <div className="text-xs text-black/40 text-center py-4">
+                Select a player in the 3D view to transform.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-black/60">Selected Player</span>
+                  <span className="text-xs font-bold text-black">{selectedPerson.name}</span>
+                </div>
+                
+                <div className="pt-4 border-t border-[#eee]">
+                  <div className="text-xs text-black/60 mb-2">Mode</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button 
+                      onClick={() => setTransformMode('translate')}
+                      className={`flex items-center gap-2 p-2 rounded-lg transition-all border ${transformMode === 'translate' ? 'bg-[#FC3434]/10 border-[#FC3434]/30 text-[#FC3434]' : 'bg-[#f5f5f5] border-transparent text-black/70 hover:bg-[#eee]'}`}
+                    >
+                      <kbd className={`px-2 py-1 rounded text-[10px] font-mono font-bold ${transformMode === 'translate' ? 'bg-[#FC3434] text-white' : 'bg-white border border-[#ddd] text-black'}`}>T</kbd>
+                      <span className="text-xs font-medium">Translate</span>
+                    </button>
+                    <button 
+                      onClick={() => setTransformMode('rotate')}
+                      className={`flex items-center gap-2 p-2 rounded-lg transition-all border ${transformMode === 'rotate' ? 'bg-[#FC3434]/10 border-[#FC3434]/30 text-[#FC3434]' : 'bg-[#f5f5f5] border-transparent text-black/70 hover:bg-[#eee]'}`}
+                    >
+                      <kbd className={`px-2 py-1 rounded text-[10px] font-mono font-bold ${transformMode === 'rotate' ? 'bg-[#FC3434] text-white' : 'bg-white border border-[#ddd] text-black'}`}>R</kbd>
+                      <span className="text-xs font-medium">Rotate</span>
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="text-[10px] text-black/40 leading-relaxed mt-4">
+                  Use the 3D gizmo on the selected player to move or rotate them. Changes are saved automatically.
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTool === 'xg' && (
           <div className="p-4 rounded-xl bg-white border border-[#eee] shadow-sm">
             <h4 className="text-[10px] font-bold text-[#999] uppercase tracking-widest mb-4">xG Analysis</h4>

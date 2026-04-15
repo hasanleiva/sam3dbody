@@ -1,6 +1,6 @@
-import React, { Suspense, useMemo, useCallback, useRef } from 'react';
+import React, { Suspense, useMemo, useCallback, useRef, useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress, Line, Text } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress, Line, Text, TransformControls } from '@react-three/drei';
 import { HumanModel } from './HumanModel';
 import { DetectedPerson, CalibrationPoint, DistanceMeasurement } from '../types';
 import { PITCH_LINES } from '../utils/homography';
@@ -88,7 +88,7 @@ const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors
     
     geom.computeVertexNormals();
     return geom;
-  }, [geometry, colors, color]);
+  }, [geometry, color, colors?.jersey, colors?.shorts, colors?.socks, colors?.body]);
 
   return (
     <mesh geometry={clonedGeometry} castShadow receiveShadow>
@@ -119,7 +119,114 @@ interface ThreeDViewportProps {
   overlayOpacity?: number;
   image?: string | null;
   videoUrl?: string | null;
+  activeTool?: 'xg' | 'distance' | 'transform' | null;
+  transformMode?: 'translate' | 'rotate';
+  onUpdatePerson?: (id: string, updates: Partial<DetectedPerson>) => void;
 }
+
+const PersonGroup = ({ 
+  person, 
+  isSelected, 
+  onSelectPerson, 
+  onPitchClick, 
+  activeTool, 
+  transformMode,
+  onUpdatePerson,
+  controlsRef
+}: { 
+  person: DetectedPerson, 
+  isSelected: boolean, 
+  onSelectPerson?: (id: string) => void, 
+  onPitchClick?: (point: [number, number, number]) => void,
+  activeTool?: string | null,
+  transformMode?: 'translate' | 'rotate',
+  onUpdatePerson?: (id: string, updates: Partial<DetectedPerson>) => void,
+  controlsRef: React.MutableRefObject<any>
+}) => {
+  const groupRef = useRef<THREE.Group>(null);
+
+  const wx = person.worldPos![0];
+  const wy = person.worldPos![1];
+
+  const content = (
+    <group 
+      ref={groupRef}
+      position={[wx - 52.5, 0, wy - 34]}
+      rotation={person.pose.rotation}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (onSelectPerson) {
+          onSelectPerson(person.id);
+        }
+        if (onPitchClick) {
+          onPitchClick([e.point.x, e.point.y, e.point.z]);
+        }
+      }}
+    >
+      {isSelected && activeTool !== 'transform' ? (
+        <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
+          {person.meshUrl ? (
+            <PersonMesh url={person.meshUrl} color="#FC3434" colors={person.colors} />
+          ) : (
+            <HumanModel 
+              rotation={[0, 0, 0]} 
+              scale={1.8} 
+              color="#FC3434"
+              colors={person.colors}
+            />
+          )}
+        </Float>
+      ) : (
+        person.meshUrl ? (
+          <PersonMesh url={person.meshUrl} color={isSelected ? "#FC3434" : "#999"} colors={person.colors} />
+        ) : (
+          <HumanModel 
+            rotation={[0, 0, 0]} 
+            scale={1.8} 
+            color={isSelected ? "#FC3434" : "#999"} 
+            colors={person.colors}
+          />
+        )
+      )}
+      
+      {/* Selection Indicator */}
+      {isSelected && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+          <ringGeometry args={[0.8, 1.0, 32]} />
+          <meshBasicMaterial color="#FC3434" />
+        </mesh>
+      )}
+    </group>
+  );
+
+  if (isSelected && activeTool === 'transform') {
+    return (
+      <>
+        <TransformControls 
+          object={groupRef}
+          mode={transformMode}
+          onMouseUp={() => {
+            if (groupRef.current && onUpdatePerson) {
+              // Drag ended, save new position/rotation
+              const pos = groupRef.current.position;
+              const rot = groupRef.current.rotation;
+              onUpdatePerson(person.id, {
+                worldPos: [pos.x + 52.5, pos.z + 34],
+                pose: {
+                  ...person.pose,
+                  rotation: [rot.x, rot.y, rot.z]
+                }
+              });
+            }
+          }}
+        />
+        {content}
+      </>
+    );
+  }
+
+  return content;
+};
 
 const GoalNet: React.FC<{ position: [number, number, number], rotation: [number, number, number] }> = ({ position, rotation }) => {
   const width = 7.32;
@@ -324,7 +431,10 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
   overlayEnabled,
   overlayOpacity = 0.5,
   image,
-  videoUrl
+  videoUrl,
+  activeTool,
+  transformMode,
+  onUpdatePerson
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const cameraRef = React.useRef<THREE.PerspectiveCamera>(null);
@@ -482,54 +592,19 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
             if (!person.worldPos) return null;
             
             const isSelected = selectedPerson?.id === person.id;
-            const [wx, wy] = person.worldPos;
             
             return (
-              <group 
-                key={person.id} 
-                position={[wx - 52.5, 0, wy - 34]}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (onSelectPerson) {
-                    onSelectPerson(person.id);
-                  }
-                  if (onPitchClick) {
-                    onPitchClick([e.point.x, e.point.y, e.point.z]);
-                  }
-                }}
-              >
-                {isSelected ? (
-                  <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
-                    {person.meshUrl ? (
-                      <PersonMesh url={person.meshUrl} color="#FC3434" colors={person.colors} />
-                    ) : (
-                      <HumanModel 
-                        rotation={person.pose.rotation} 
-                        scale={1.8} 
-                        color="#FC3434"
-                      />
-                    )}
-                  </Float>
-                ) : (
-                  person.meshUrl ? (
-                    <PersonMesh url={person.meshUrl} color="#999" colors={person.colors} />
-                  ) : (
-                    <HumanModel 
-                      rotation={person.pose.rotation} 
-                      scale={1.8} 
-                      color="#999" 
-                    />
-                  )
-                )}
-                
-                {/* Selection Indicator */}
-                {isSelected && (
-                  <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-                    <ringGeometry args={[0.8, 1.0, 32]} />
-                    <meshBasicMaterial color="#FC3434" />
-                  </mesh>
-                )}
-              </group>
+              <PersonGroup 
+                key={person.id}
+                person={person}
+                isSelected={isSelected}
+                onSelectPerson={onSelectPerson}
+                onPitchClick={onPitchClick}
+                activeTool={activeTool}
+                transformMode={transformMode}
+                onUpdatePerson={onUpdatePerson}
+                controlsRef={controlsRef}
+              />
             );
           })}
 

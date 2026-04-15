@@ -35,7 +35,8 @@ const App: React.FC = () => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSaveSceneModalOpen, setIsSaveSceneModalOpen] = useState(false);
   const [isLoadSceneModalOpen, setIsLoadSceneModalOpen] = useState(false);
-  const [activeAnalysisTool, setActiveAnalysisTool] = useState<'xg' | 'distance' | null>(null);
+  const [activeAnalysisTool, setActiveAnalysisTool] = useState<'xg' | 'distance' | 'transform' | null>(null);
+  const [transformMode, setTransformMode] = useState<'translate' | 'rotate'>('translate');
   const [measurements, setMeasurements] = useState<DistanceMeasurement[]>([]);
   const [activeMeasurementId, setActiveMeasurementId] = useState<string | null>(null);
   const [overlayEnabled, setOverlayEnabled] = useState(false);
@@ -406,6 +407,8 @@ const App: React.FC = () => {
               selectedPerson={selectedPerson}
               activeTool={activeAnalysisTool}
               setActiveTool={setActiveAnalysisTool}
+              transformMode={transformMode}
+              setTransformMode={setTransformMode}
               measurements={measurements}
               activeMeasurementId={activeMeasurementId}
               setActiveMeasurementId={setActiveMeasurementId}
@@ -498,6 +501,10 @@ const App: React.FC = () => {
             people={state.detectedPeople} 
             selectedId={state.selectedId} 
             onSelect={(id) => setState(prev => ({ ...prev, selectedId: id }))} 
+            onUpdatePerson={(id, updates) => setState(prev => ({
+              ...prev,
+              detectedPeople: prev.detectedPeople.map(p => p.id === id ? { ...p, ...updates } : p)
+            }))}
           />
           
           <div className="flex-1 flex overflow-hidden p-6 gap-6">
@@ -672,6 +679,12 @@ const App: React.FC = () => {
                   overlayOpacity={overlayOpacity}
                   image={state.image}
                   videoUrl={state.videoUrl}
+                  activeTool={activeAnalysisTool}
+                  transformMode={transformMode}
+                  onUpdatePerson={(id, updates) => setState(prev => ({
+                    ...prev,
+                    detectedPeople: prev.detectedPeople.map(p => p.id === id ? { ...p, ...updates } : p)
+                  }))}
                 />
               </div>
             </div>

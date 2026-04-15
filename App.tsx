@@ -35,7 +35,7 @@ const App: React.FC = () => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSaveSceneModalOpen, setIsSaveSceneModalOpen] = useState(false);
   const [isLoadSceneModalOpen, setIsLoadSceneModalOpen] = useState(false);
-  const [activeAnalysisTool, setActiveAnalysisTool] = useState<'xg' | 'distance' | 'transform' | null>(null);
+  const [activeAnalysisTool, setActiveAnalysisTool] = useState<'xg' | 'distance' | 'transform' | 'arrow' | null>(null);
   const [transformMode, setTransformMode] = useState<'translate' | 'rotate'>('translate');
   const [measurements, setMeasurements] = useState<DistanceMeasurement[]>([]);
   const [activeMeasurementId, setActiveMeasurementId] = useState<string | null>(null);
@@ -659,14 +659,14 @@ const App: React.FC = () => {
                   onFullscreenToggle={() => setState(prev => ({ ...prev, fullscreenView: prev.fullscreenView === '3d' ? null : '3d' }))}
                   onSelectPerson={(id) => setState(prev => ({ ...prev, selectedId: id }))}
                   onPitchClick={(point) => {
-                    if (activeAnalysisTool === 'distance') {
+                    if (activeAnalysisTool === 'distance' || activeAnalysisTool === 'arrow') {
                       setMeasurements(prev => {
                         let active = prev.find(m => m.id === activeMeasurementId);
                         
                         if (!active || active.points.length >= 2) {
                           const newId = Math.random().toString(36).substring(7);
                           setActiveMeasurementId(newId);
-                          return [...prev, { id: newId, points: [point] }];
+                          return [...prev, { id: newId, type: activeAnalysisTool, points: [point] }];
                         } else {
                           return prev.map(m => m.id === activeMeasurementId ? { ...m, points: [...m.points, point] } : m);
                         }

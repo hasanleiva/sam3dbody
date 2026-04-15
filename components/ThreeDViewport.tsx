@@ -1,6 +1,6 @@
 import React, { Suspense, useMemo, useCallback, useRef, useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress, Line, Text, TransformControls } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress, Line, Text, TransformControls, Html } from '@react-three/drei';
 import { HumanModel } from './HumanModel';
 import { DetectedPerson, CalibrationPoint, DistanceMeasurement } from '../types';
 import { PITCH_LINES } from '../utils/homography';
@@ -119,7 +119,7 @@ interface ThreeDViewportProps {
   overlayOpacity?: number;
   image?: string | null;
   videoUrl?: string | null;
-  activeTool?: 'xg' | 'distance' | 'transform' | null;
+  activeTool?: 'xg' | 'distance' | 'transform' | 'arrow' | null;
   transformMode?: 'translate' | 'rotate';
   onUpdatePerson?: (id: string, updates: Partial<DetectedPerson>) => void;
 }
@@ -196,6 +196,15 @@ const PersonGroup = ({
           <meshBasicMaterial color="#FC3434" />
         </mesh>
       )}
+
+      {/* Player Name Label */}
+      {person.showName && (
+        <Html position={[0, 2.2, 0]} center zIndexRange={[100, 0]}>
+          <div className="bg-white px-2 py-1 rounded-md shadow-md border border-gray-200 text-black text-xs font-bold whitespace-nowrap pointer-events-none">
+            {person.name}
+          </div>
+        </Html>
+      )}
     </group>
   );
 
@@ -226,6 +235,157 @@ const PersonGroup = ({
   }
 
   return content;
+};
+
+const ArcArrow: React.FC<{ start: [number, number, number], end: [number, number, number], color: string, isActive: boolean }> = ({ start, end, color, isActive }) => {
+  const curve = useMemo(() => {
+    const startVec = new THREE.Vector3(start[0], start[1], start[2]);
+    const endVec = new THREE.Vector3(end[0], end[1], end[2]);
+    const distance = startVec.distanceTo(endVec);
+    
+    // Create a quadratic bezier curve
+    const midPoint = new THREE.Vector3().addVectors(startVec, endVec).multiplyScalar(0.5);
+    // Height of the arc depends on the distance
+    midPoint.y += Math.max(2, distance * 0.3);
+    
+    return new THREE.QuadraticBezierCurve3(startVec, midPoint, endVec);
+  }, [start, end]);
+
+  const { ribbonGeometry, arrowGeometry, arrowPosition, arrowRotation, shadowRibbonGeometry, shadowArrowGeometry } = useMemo(() => {
+    const ribbonWidth = 0.4;
+    const ribbonThickness = 0.05;
+    const segments = 64;
+    
+    const curveLength = curve.getLength();
+    const arrowLength = 1.5;
+    const tBase = curveLength > arrowLength ? 1 - (arrowLength / curveLength) : 0.01;
+    
+    const vertices = [];
+    const indices = [];
+
+    for (let i = 0; i <= segments; i++) {
+      const t = (i / segments) * tBase;
+      const pt = curve.getPoint(t);
+      const tangent = curve.getTangent(t).normalize();
+      const up = new THREE.Vector3(0, 1, 0);
+      let right = new THREE.Vector3().crossVectors(tangent, up).normalize();
+      if (right.lengthSq() < 0.001) right.set(1, 0, 0);
+      let normal = new THREE.Vector3().crossVectors(right, tangent).normalize();
+      
+      const p1 = new THREE.Vector3().copy(pt).addScaledVector(right, ribbonWidth/2).addScaledVector(normal, ribbonThickness/2);
+      const p2 = new THREE.Vector3().copy(pt).addScaledVector(right, -ribbonWidth/2).addScaledVector(normal, ribbonThickness/2);
+      const p3 = new THREE.Vector3().copy(pt).addScaledVector(right, -ribbonWidth/2).addScaledVector(normal, -ribbonThickness/2);
+      const p4 = new THREE.Vector3().copy(pt).addScaledVector(right, ribbonWidth/2).addScaledVector(normal, -ribbonThickness/2);
+      
+      vertices.push(p1.x, p1.y, p1.z);
+      vertices.push(p2.x, p2.y, p2.z);
+      vertices.push(p3.x, p3.y, p3.z);
+      vertices.push(p4.x, p4.y, p4.z);
+      
+      if (i < segments) {
+        const offset = i * 4;
+        // Top
+        indices.push(offset, offset + 4, offset + 5);
+        indices.push(offset, offset + 5, offset + 1);
+        // Bottom
+        indices.push(offset + 3, offset + 2, offset + 6);
+        indices.push(offset + 3, offset + 6, offset + 7);
+        // Right
+        indices.push(offset, offset + 3, offset + 7);
+        indices.push(offset, offset + 7, offset + 4);
+        // Left
+        indices.push(offset + 1, offset + 5, offset + 6);
+        indices.push(offset + 1, offset + 6, offset + 2);
+      }
+    }
+
+    indices.push(0, 1, 2);
+    indices.push(0, 2, 3);
+    
+    const endOffset = segments * 4;
+    indices.push(endOffset, endOffset + 3, endOffset + 2);
+    indices.push(endOffset, endOffset + 2, endOffset + 1);
+
+    const rGeom = new THREE.BufferGeometry();
+    rGeom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    rGeom.setIndex(indices);
+    rGeom.computeVertexNormals();
+
+    const basePt = curve.getPoint(tBase);
+    const tipPt = curve.getPoint(1);
+    const arrowDir = new THREE.Vector3().subVectors(tipPt, basePt).normalize();
+    const actualArrowLength = basePt.distanceTo(tipPt);
+
+    const arrowShape = new THREE.Shape();
+    arrowShape.moveTo(0, actualArrowLength);
+    arrowShape.lineTo(0.6, 0);
+    arrowShape.lineTo(-0.6, 0);
+    arrowShape.lineTo(0, actualArrowLength);
+
+    const arrowExtrudeSettings = { depth: ribbonThickness, bevelEnabled: false };
+    const aGeom = new THREE.ExtrudeGeometry(arrowShape, arrowExtrudeSettings);
+    aGeom.translate(0, 0, -ribbonThickness / 2);
+
+    const endUp = new THREE.Vector3(0, 1, 0);
+    let endRight = new THREE.Vector3().crossVectors(arrowDir, endUp).normalize();
+    if (endRight.lengthSq() < 0.001) endRight.set(1, 0, 0);
+    let endNormal = new THREE.Vector3().crossVectors(endRight, arrowDir).normalize();
+
+    const matrix = new THREE.Matrix4().makeBasis(endRight, arrowDir, endNormal);
+    const quaternion = new THREE.Quaternion().setFromRotationMatrix(matrix);
+    const euler = new THREE.Euler().setFromQuaternion(quaternion);
+    
+    const arrPos = basePt.toArray() as [number, number, number];
+    const arrRot = [euler.x, euler.y, euler.z] as [number, number, number];
+
+    // Create shadow geometries by flattening to Y=0.02
+    const shadowRGeom = rGeom.clone();
+    const rPosAttr = shadowRGeom.attributes.position;
+    for (let i = 0; i < rPosAttr.count; i++) {
+      rPosAttr.setY(i, 0.02);
+    }
+
+    const shadowAGeom = aGeom.clone();
+    const arrowWorldMatrix = new THREE.Matrix4().compose(
+      basePt,
+      quaternion,
+      new THREE.Vector3(1, 1, 1)
+    );
+    shadowAGeom.applyMatrix4(arrowWorldMatrix);
+    const aPosAttr = shadowAGeom.attributes.position;
+    for (let i = 0; i < aPosAttr.count; i++) {
+      aPosAttr.setY(i, 0.02);
+    }
+
+    return { 
+      ribbonGeometry: rGeom, 
+      arrowGeometry: aGeom, 
+      arrowPosition: arrPos,
+      arrowRotation: arrRot,
+      shadowRibbonGeometry: shadowRGeom,
+      shadowArrowGeometry: shadowAGeom
+    };
+  }, [curve]);
+
+  return (
+    <group>
+      {/* Shadow */}
+      <mesh geometry={shadowRibbonGeometry}>
+        <meshBasicMaterial color="#000000" opacity={0.3} transparent depthWrite={false} />
+      </mesh>
+      <mesh geometry={shadowArrowGeometry}>
+        <meshBasicMaterial color="#000000" opacity={0.3} transparent depthWrite={false} />
+      </mesh>
+      
+      {/* Main Arrow */}
+      <mesh geometry={ribbonGeometry} castShadow>
+        <meshStandardMaterial color={color} opacity={isActive ? 1 : 0.8} transparent side={THREE.DoubleSide} />
+      </mesh>
+      <mesh geometry={arrowGeometry} position={arrowPosition} rotation={arrowRotation} castShadow>
+        <meshStandardMaterial color={color} opacity={isActive ? 1 : 0.8} transparent side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
 };
 
 const GoalNet: React.FC<{ position: [number, number, number], rotation: [number, number, number] }> = ({ position, rotation }) => {
@@ -613,6 +773,28 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
             
             const isActive = m.id === activeMeasurementId;
             const color = isActive ? "#10b981" : "#059669";
+            
+            if (m.type === 'arrow') {
+              const arrowColor = isActive ? "#ffffff" : "#e5e5e5";
+              return (
+                <group key={m.id}>
+                  {m.points.length === 1 && (
+                    <mesh position={[m.points[0][0], 0.05, m.points[0][2]]}>
+                      <sphereGeometry args={[0.3, 16, 16]} />
+                      <meshBasicMaterial color={arrowColor} />
+                    </mesh>
+                  )}
+                  {m.points.length === 2 && (
+                    <ArcArrow 
+                      start={m.points[0]} 
+                      end={m.points[1]} 
+                      color={arrowColor} 
+                      isActive={isActive} 
+                    />
+                  )}
+                </group>
+              );
+            }
             
             return (
               <group key={m.id}>

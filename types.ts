@@ -24,6 +24,7 @@ export interface DetectedPerson {
     socks: string;
     body: string;
   };
+  showName?: boolean;
 }
 
 export interface CalibrationPoint {
@@ -36,6 +37,7 @@ export interface CalibrationPoint {
 
 export interface DistanceMeasurement {
   id: string;
+  type?: 'distance' | 'arrow';
   points: [number, number, number][];
 }
 

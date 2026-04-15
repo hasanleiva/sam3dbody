@@ -3,8 +3,8 @@ import { DetectedPerson, DistanceMeasurement } from '../types';
 
 interface AnalysisToolsProps {
   selectedPerson: DetectedPerson | null;
-  activeTool: 'xg' | 'distance' | 'transform' | null;
-  setActiveTool: (tool: 'xg' | 'distance' | 'transform' | null) => void;
+  activeTool: 'xg' | 'distance' | 'transform' | 'arrow' | null;
+  setActiveTool: (tool: 'xg' | 'distance' | 'transform' | 'arrow' | null) => void;
   transformMode: 'translate' | 'rotate';
   setTransformMode: (mode: 'translate' | 'rotate') => void;
   measurements: DistanceMeasurement[];
@@ -166,6 +166,28 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
               <div className="text-[10px] opacity-70">Measure pitch distances</div>
             </div>
           </button>
+
+          {/* 3D Arrow Tool */}
+          <button
+            onClick={() => {
+              setActiveTool(activeTool === 'arrow' ? null : 'arrow');
+            }}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
+              activeTool === 'arrow' 
+                ? 'bg-[#FC3434]/10 border-[#FC3434]/50 text-[#FC3434]' 
+                : 'bg-white border-[#eee] text-black/60 hover:bg-[#f5f5f5] hover:border-[#ddd]'
+            }`}
+          >
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${activeTool === 'arrow' ? 'bg-[#FC3434]/20' : 'bg-[#f5f5f5]'}`}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+              </svg>
+            </div>
+            <div className="text-left">
+              <div className="text-sm font-bold">3D Arrow</div>
+              <div className="text-[10px] opacity-70">Draw 3D arrows on pitch</div>
+            </div>
+          </button>
         </div>
       </section>
 
@@ -245,6 +267,56 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
                 Player position not available.
               </div>
             )}
+          </div>
+        )}
+
+        {activeTool === 'arrow' && (
+          <div className="p-4 rounded-xl bg-white border border-[#eee] shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-[10px] font-bold text-[#999] uppercase tracking-widest">3D Arrows</h4>
+              {measurements.filter(m => m.type === 'arrow').length > 0 && (
+                <button 
+                  onClick={() => {
+                    measurements.filter(m => m.type === 'arrow').forEach(m => onClearMeasurement(m.id));
+                  }}
+                  className="text-[10px] text-[#FC3434] hover:text-[#e02e2e] font-bold uppercase"
+                >
+                  Clear Arrows
+                </button>
+              )}
+            </div>
+            
+            <div className="space-y-2 mb-4">
+              {measurements.filter(m => m.type === 'arrow').length === 0 && (
+                <div className="text-xs text-black/40 text-center py-4">
+                  Click on the pitch to draw an arrow.
+                </div>
+              )}
+              {measurements.filter(m => m.type === 'arrow').map((m, i) => (
+                <div key={m.id} className="flex items-center justify-between p-2 rounded-lg bg-[#f5f5f5] border border-[#eee]">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-white border border-[#ddd] flex items-center justify-center text-[10px] font-bold text-black/60">
+                      {i + 1}
+                    </div>
+                    <span className="text-xs font-medium text-black">
+                      {m.points.length === 1 ? 'Drawing...' : 'Arrow'}
+                    </span>
+                  </div>
+                  <button 
+                    onClick={() => onClearMeasurement(m.id)}
+                    className="p-1 text-black/30 hover:text-red-500 hover:bg-white rounded transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+            
+            <div className="text-[10px] text-black/40 leading-relaxed">
+              Click two points on the pitch to draw a 3D arc arrow.
+            </div>
           </div>
         )}
 

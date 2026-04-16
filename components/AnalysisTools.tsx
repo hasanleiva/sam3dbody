@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { DetectedPerson, DistanceMeasurement } from '../types';
+import { DetectedPerson, DistanceMeasurement, BillboardData } from '../types';
 
 interface AnalysisToolsProps {
   selectedPerson: DetectedPerson | null;
-  activeTool: 'xg' | 'distance' | 'transform' | 'arrow' | null;
-  setActiveTool: (tool: 'xg' | 'distance' | 'transform' | 'arrow' | null) => void;
+  activeTool: 'xg' | 'distance' | 'transform' | 'arrow' | 'billboard' | null;
+  setActiveTool: (tool: 'xg' | 'distance' | 'transform' | 'arrow' | 'billboard' | null) => void;
   transformMode: 'translate' | 'rotate';
   setTransformMode: (mode: 'translate' | 'rotate') => void;
   measurements: DistanceMeasurement[];
@@ -16,6 +16,10 @@ interface AnalysisToolsProps {
   setOverlayEnabled: (enabled: boolean) => void;
   overlayOpacity: number;
   setOverlayOpacity: (opacity: number) => void;
+  billboards: BillboardData[];
+  setBillboards: React.Dispatch<React.SetStateAction<BillboardData[]>>;
+  selectedBillboardId: string | null;
+  setSelectedBillboardId: (id: string | null) => void;
 }
 
 export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
@@ -32,7 +36,11 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
   overlayEnabled,
   setOverlayEnabled,
   overlayOpacity,
-  setOverlayOpacity
+  setOverlayOpacity,
+  billboards,
+  setBillboards,
+  selectedBillboardId,
+  setSelectedBillboardId
 }) => {
   const [xgValue, setXgValue] = useState<number | null>(null);
 
@@ -186,6 +194,28 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
             <div className="text-left">
               <div className="text-sm font-bold">3D Arrow</div>
               <div className="text-[10px] opacity-70">Draw 3D arrows on pitch</div>
+            </div>
+          </button>
+
+          {/* Image Billboard Tool */}
+          <button
+            onClick={() => {
+              setActiveTool(activeTool === 'billboard' ? null : 'billboard');
+            }}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
+              activeTool === 'billboard' 
+                ? 'bg-[#FC3434]/10 border-[#FC3434]/50 text-[#FC3434]' 
+                : 'bg-white border-[#eee] text-black/60 hover:bg-[#f5f5f5] hover:border-[#ddd]'
+            }`}
+          >
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${activeTool === 'billboard' ? 'bg-[#FC3434]/20' : 'bg-[#f5f5f5]'}`}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div className="text-left">
+              <div className="text-sm font-bold">Image Billboard</div>
+              <div className="text-[10px] opacity-70">Add images to 3D scene</div>
             </div>
           </button>
         </div>
@@ -405,6 +435,130 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
             >
               + New Measurement
             </button>
+          </div>
+        )}
+
+        {activeTool === 'billboard' && (
+          <div className="p-4 rounded-xl bg-white border border-[#eee] shadow-sm">
+            <h4 className="text-[10px] font-bold text-[#999] uppercase tracking-widest mb-4">Image Billboards</h4>
+            
+            <div className="mb-4">
+              <label className="block w-full py-2 bg-[#f5f5f5] hover:bg-[#eee] border border-[#ddd] border-dashed text-center rounded-lg cursor-pointer transition-colors">
+                <span className="text-xs font-medium text-black/60">Upload Image</span>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        const url = ev.target?.result as string;
+                        const img = new Image();
+                        img.onload = () => {
+                          const newBillboard: BillboardData = {
+                            id: Math.random().toString(36).substring(7),
+                            url,
+                            position: [0, 0, 0],
+                            width: 2,
+                            height: 2 * (img.height / img.width)
+                          };
+                          setBillboards(prev => [...prev, newBillboard]);
+                          setSelectedBillboardId(newBillboard.id);
+                        };
+                        img.src = url;
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }} 
+                />
+              </label>
+            </div>
+
+            <div className="space-y-2 mb-4">
+              {billboards.length === 0 && (
+                <div className="text-xs text-black/40 text-center py-4">
+                  No billboards added yet.
+                </div>
+              )}
+              {billboards.map((b, i) => (
+                <div 
+                  key={b.id}
+                  onClick={() => setSelectedBillboardId(b.id)}
+                  className={`p-2 rounded-lg border cursor-pointer transition-all flex justify-between items-center ${
+                    b.id === selectedBillboardId 
+                      ? 'bg-[#FC3434]/10 border-[#FC3434]/30' 
+                      : 'bg-[#f8f8f8] border-[#eee] hover:bg-[#f0f0f0]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <img src={b.url} alt="billboard" className="w-6 h-6 object-cover rounded bg-white border border-[#ddd]" />
+                    <span className="text-xs font-medium text-black/70 truncate">Billboard {i + 1}</span>
+                  </div>
+                  <button 
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      setBillboards(prev => prev.filter(bb => bb.id !== b.id));
+                      if (selectedBillboardId === b.id) setSelectedBillboardId(null);
+                    }}
+                    className="p-1 hover:bg-[#FC3434]/10 text-black/20 hover:text-[#FC3434] rounded transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {selectedBillboardId && (
+              <div className="pt-4 border-t border-[#eee]">
+                <div className="text-xs font-bold text-black mb-3">Dimensions</div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex justify-between text-[10px] text-black/60 mb-1">
+                      <span>Width</span>
+                      <span>{billboards.find(b => b.id === selectedBillboardId)?.width.toFixed(1)}m</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0.5" 
+                      max="10" 
+                      step="0.1"
+                      value={billboards.find(b => b.id === selectedBillboardId)?.width || 2}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setBillboards(prev => prev.map(b => b.id === selectedBillboardId ? { ...b, width: val } : b));
+                      }}
+                      className="w-full accent-[#FC3434]"
+                    />
+                  </div>
+                  
+                  <div>
+                    <div className="flex justify-between text-[10px] text-black/60 mb-1">
+                      <span>Height</span>
+                      <span>{billboards.find(b => b.id === selectedBillboardId)?.height.toFixed(1)}m</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0.5" 
+                      max="10" 
+                      step="0.1"
+                      value={billboards.find(b => b.id === selectedBillboardId)?.height || 2}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setBillboards(prev => prev.map(b => b.id === selectedBillboardId ? { ...b, height: val } : b));
+                      }}
+                      className="w-full accent-[#FC3434]"
+                    />
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-black/40 leading-relaxed mt-4">
+                  Use the 3D gizmo on the selected billboard to move it around the pitch.
+                </div>
+              </div>
+            )}
           </div>
         )}
       </section>

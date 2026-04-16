@@ -2,7 +2,7 @@ import React, { Suspense, useMemo, useCallback, useRef, useState, useEffect } fr
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress, Line, Text, TransformControls, Html } from '@react-three/drei';
 import { HumanModel } from './HumanModel';
-import { DetectedPerson, CalibrationPoint, DistanceMeasurement } from '../types';
+import { DetectedPerson, CalibrationPoint, DistanceMeasurement, BillboardData } from '../types';
 import { PITCH_LINES } from '../utils/homography';
 import * as THREE from 'three';
 import { PLYLoader } from 'three-stdlib';
@@ -119,9 +119,13 @@ interface ThreeDViewportProps {
   overlayOpacity?: number;
   image?: string | null;
   videoUrl?: string | null;
-  activeTool?: 'xg' | 'distance' | 'transform' | 'arrow' | null;
+  activeTool?: 'xg' | 'distance' | 'transform' | 'arrow' | 'billboard' | null;
   transformMode?: 'translate' | 'rotate';
   onUpdatePerson?: (id: string, updates: Partial<DetectedPerson>) => void;
+  billboards?: BillboardData[];
+  setBillboards?: React.Dispatch<React.SetStateAction<BillboardData[]>>;
+  selectedBillboardId?: string | null;
+  setSelectedBillboardId?: (id: string | null) => void;
 }
 
 const PersonGroup = ({ 
@@ -143,82 +147,80 @@ const PersonGroup = ({
   onUpdatePerson?: (id: string, updates: Partial<DetectedPerson>) => void,
   controlsRef: React.MutableRefObject<any>
 }) => {
-  const groupRef = useRef<THREE.Group>(null);
+  const [target, setTarget] = useState<THREE.Group | null>(null);
 
   const wx = person.worldPos![0];
   const wy = person.worldPos![1];
 
-  const content = (
-    <group 
-      ref={groupRef}
-      position={[wx - 52.5, 0, wy - 34]}
-      rotation={person.pose.rotation}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (onSelectPerson) {
-          onSelectPerson(person.id);
-        }
-        if (onPitchClick) {
-          onPitchClick([e.point.x, e.point.y, e.point.z]);
-        }
-      }}
-    >
-      {isSelected && activeTool !== 'transform' ? (
-        <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
-          {person.meshUrl ? (
-            <PersonMesh url={person.meshUrl} color="#FC3434" colors={person.colors} />
+  return (
+    <>
+      <group 
+        ref={setTarget}
+        position={[wx - 52.5, 0, wy - 34]}
+        rotation={person.pose.rotation}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (onSelectPerson) {
+            onSelectPerson(person.id);
+          }
+          if (onPitchClick) {
+            onPitchClick([e.point.x, e.point.y, e.point.z]);
+          }
+        }}
+      >
+        {isSelected && activeTool !== 'transform' ? (
+          <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
+            {person.meshUrl ? (
+              <PersonMesh url={person.meshUrl} color="#FC3434" colors={person.colors} />
+            ) : (
+              <HumanModel 
+                rotation={[0, 0, 0]} 
+                scale={1.8} 
+                color="#FC3434"
+                colors={person.colors}
+              />
+            )}
+          </Float>
+        ) : (
+          person.meshUrl ? (
+            <PersonMesh url={person.meshUrl} color={isSelected ? "#FC3434" : "#999"} colors={person.colors} />
           ) : (
             <HumanModel 
               rotation={[0, 0, 0]} 
               scale={1.8} 
-              color="#FC3434"
+              color={isSelected ? "#FC3434" : "#999"} 
               colors={person.colors}
             />
-          )}
-        </Float>
-      ) : (
-        person.meshUrl ? (
-          <PersonMesh url={person.meshUrl} color={isSelected ? "#FC3434" : "#999"} colors={person.colors} />
-        ) : (
-          <HumanModel 
-            rotation={[0, 0, 0]} 
-            scale={1.8} 
-            color={isSelected ? "#FC3434" : "#999"} 
-            colors={person.colors}
-          />
-        )
-      )}
-      
-      {/* Selection Indicator */}
-      {isSelected && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-          <ringGeometry args={[0.8, 1.0, 32]} />
-          <meshBasicMaterial color="#FC3434" />
-        </mesh>
-      )}
+          )
+        )}
+        
+        {/* Selection Indicator */}
+        {isSelected && (
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+            <ringGeometry args={[0.8, 1.0, 32]} />
+            <meshBasicMaterial color="#FC3434" />
+          </mesh>
+        )}
 
-      {/* Player Name Label */}
-      {person.showName && (
-        <Html position={[0, 2.2, 0]} center zIndexRange={[100, 0]}>
-          <div className="bg-white px-2 py-1 rounded-md shadow-md border border-gray-200 text-black text-xs font-bold whitespace-nowrap pointer-events-none">
-            {person.name}
-          </div>
-        </Html>
-      )}
-    </group>
-  );
+        {/* Player Name Label */}
+        {person.showName && (
+          <Html position={[0, 2.2, 0]} center zIndexRange={[100, 0]}>
+            <div className="bg-white px-2 py-1 rounded-md shadow-md border border-gray-200 text-black text-xs font-bold whitespace-nowrap pointer-events-none">
+              {person.name}
+            </div>
+          </Html>
+        )}
+      </group>
 
-  if (isSelected && activeTool === 'transform') {
-    return (
-      <>
+      {target && isSelected && activeTool === 'transform' && (
         <TransformControls 
-          object={groupRef}
+          object={target}
           mode={transformMode}
           onMouseUp={() => {
-            if (groupRef.current && onUpdatePerson) {
+            if (onUpdatePerson) {
               // Drag ended, save new position/rotation
-              const pos = groupRef.current.position;
-              const rot = groupRef.current.rotation;
+              const pos = target.position;
+              const rot = target.rotation;
               onUpdatePerson(person.id, {
                 worldPos: [pos.x + 52.5, pos.z + 34],
                 pose: {
@@ -229,12 +231,62 @@ const PersonGroup = ({
             }
           }}
         />
-        {content}
-      </>
-    );
-  }
+      )}
+    </>
+  );
+};
 
-  return content;
+const BillboardGroup = ({
+  billboard,
+  isSelected,
+  onSelect,
+  activeTool,
+  onUpdate
+}: {
+  billboard: BillboardData,
+  isSelected: boolean,
+  onSelect?: (id: string) => void,
+  activeTool?: string | null,
+  onUpdate?: (id: string, updates: Partial<BillboardData>) => void
+}) => {
+  const [target, setTarget] = useState<THREE.Group | null>(null);
+
+  const texture = useLoader(THREE.TextureLoader, billboard.url);
+
+  return (
+    <>
+      <group 
+        ref={setTarget}
+        position={billboard.position}
+        onClick={(e) => {
+          if (activeTool === 'billboard') {
+            e.stopPropagation();
+            onSelect?.(billboard.id);
+          }
+        }}
+      >
+        <mesh position={[0, billboard.height / 2, 0]} castShadow>
+          <planeGeometry args={[billboard.width, billboard.height]} />
+          <meshBasicMaterial map={texture} transparent side={THREE.DoubleSide} />
+        </mesh>
+      </group>
+
+      {target && isSelected && activeTool === 'billboard' && (
+        <TransformControls 
+          object={target}
+          mode="translate"
+          onMouseUp={() => {
+            if (onUpdate) {
+              const pos = target.position;
+              onUpdate(billboard.id, {
+                position: [pos.x, pos.y, pos.z]
+              });
+            }
+          }}
+        />
+      )}
+    </>
+  );
 };
 
 const ArcArrow: React.FC<{ start: [number, number, number], end: [number, number, number], color: string, isActive: boolean }> = ({ start, end, color, isActive }) => {
@@ -594,7 +646,11 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
   videoUrl,
   activeTool,
   transformMode,
-  onUpdatePerson
+  onUpdatePerson,
+  billboards,
+  setBillboards,
+  selectedBillboardId,
+  setSelectedBillboardId
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const cameraRef = React.useRef<THREE.PerspectiveCamera>(null);
@@ -767,6 +823,21 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
               />
             );
           })}
+
+          {billboards && billboards.map(b => (
+            <BillboardGroup
+              key={b.id}
+              billboard={b}
+              isSelected={b.id === selectedBillboardId}
+              onSelect={setSelectedBillboardId}
+              activeTool={activeTool}
+              onUpdate={(id, updates) => {
+                if (setBillboards) {
+                  setBillboards(prev => prev.map(bb => bb.id === id ? { ...bb, ...updates } : bb));
+                }
+              }}
+            />
+          ))}
 
           {measurements && measurements.map(m => {
             if (m.points.length === 0) return null;

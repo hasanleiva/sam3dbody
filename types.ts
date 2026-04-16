@@ -41,6 +41,14 @@ export interface DistanceMeasurement {
   points: [number, number, number][];
 }
 
+export interface BillboardData {
+  id: string;
+  url: string;
+  position: [number, number, number];
+  width: number;
+  height: number;
+}
+
 export interface AppState {
   image: string | null;
   videoUrl?: string | null;

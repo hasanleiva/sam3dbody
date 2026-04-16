@@ -5,7 +5,7 @@ import { ThreeDViewport } from './components/ThreeDViewport';
 import { CalibrationOverlay } from './components/CalibrationOverlay';
 import { MiniPitch } from './components/MiniPitch';
 import { AnalysisTools } from './components/AnalysisTools';
-import { AppState, DetectedPerson, CalibrationPoint, DistanceMeasurement } from './types';
+import { AppState, DetectedPerson, CalibrationPoint, DistanceMeasurement, BillboardData } from './types';
 import { calculateHomography, CALIBRATION_NODES, projectPoint } from './utils/homography';
 import { fal } from '@fal-ai/client';
 import { useAuth } from './AuthContext';
@@ -35,10 +35,12 @@ const App: React.FC = () => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSaveSceneModalOpen, setIsSaveSceneModalOpen] = useState(false);
   const [isLoadSceneModalOpen, setIsLoadSceneModalOpen] = useState(false);
-  const [activeAnalysisTool, setActiveAnalysisTool] = useState<'xg' | 'distance' | 'transform' | 'arrow' | null>(null);
+  const [activeAnalysisTool, setActiveAnalysisTool] = useState<'xg' | 'distance' | 'transform' | 'arrow' | 'billboard' | null>(null);
   const [transformMode, setTransformMode] = useState<'translate' | 'rotate'>('translate');
   const [measurements, setMeasurements] = useState<DistanceMeasurement[]>([]);
   const [activeMeasurementId, setActiveMeasurementId] = useState<string | null>(null);
+  const [billboards, setBillboards] = useState<BillboardData[]>([]);
+  const [selectedBillboardId, setSelectedBillboardId] = useState<string | null>(null);
   const [overlayEnabled, setOverlayEnabled] = useState(false);
   const [overlayOpacity, setOverlayOpacity] = useState(0.5);
 
@@ -424,6 +426,10 @@ const App: React.FC = () => {
               setOverlayEnabled={setOverlayEnabled}
               overlayOpacity={overlayOpacity}
               setOverlayOpacity={setOverlayOpacity}
+              billboards={billboards}
+              setBillboards={setBillboards}
+              selectedBillboardId={selectedBillboardId}
+              setSelectedBillboardId={setSelectedBillboardId}
             />
           ) : (
             <>
@@ -685,6 +691,10 @@ const App: React.FC = () => {
                     ...prev,
                     detectedPeople: prev.detectedPeople.map(p => p.id === id ? { ...p, ...updates } : p)
                   }))}
+                  billboards={billboards}
+                  setBillboards={setBillboards}
+                  selectedBillboardId={selectedBillboardId}
+                  setSelectedBillboardId={setSelectedBillboardId}
                 />
               </div>
             </div>

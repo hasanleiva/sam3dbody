@@ -57,18 +57,20 @@ const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors
     // 3. Create a new geometry based on the FBX's topology, but using PLY positions
     const fbxGeometry = targetMesh.geometry.clone();
     
-    // Copy positions from PLY geometry to FBX geometry
-    // Assuming identical vertex count and ordering
-    if (geom.attributes.position.count === fbxGeometry.attributes.position.count) {
-      fbxGeometry.setAttribute('position', geom.attributes.position);
+    // PLY is indexed (18,439 vertices), FBX is non-indexed (110,622). We must convert PLY to non-indexed.
+    const nonIndexedGeom = geom.toNonIndexed();
+    
+    // Copy positions from non-indexed PLY geometry to FBX geometry
+    if (nonIndexedGeom.attributes.position.count === fbxGeometry.attributes.position.count) {
+      fbxGeometry.setAttribute('position', nonIndexedGeom.attributes.position);
     } else {
-      console.warn("Vertex count mismatch! PLY:", geom.attributes.position.count, "FBX:", fbxGeometry.attributes.position.count);
-      fbxGeometry.setAttribute('position', geom.attributes.position);
+      console.warn("Vertex count mismatch! nonIndexed PLY:", nonIndexedGeom.attributes.position.count, "FBX:", fbxGeometry.attributes.position.count);
+      fbxGeometry.setAttribute('position', nonIndexedGeom.attributes.position);
     }
 
     // 4. Handle Colors (Vertex painting like before)
     if (colors) {
-      const positionAttribute = fbxGeometry.attributes.position;
+      const positionAttribute = fbxGeometry.attributes.position; // 110622
       const vertexColors = new Float32Array(positionAttribute.count * 3);
       
       const parseColor = (hexStr: string) => {
@@ -85,18 +87,21 @@ const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors
       const socksColor = parseColor(colors.socks);
       const bodyColor = parseColor('#e0ac69');
       
-      for (let i = 0; i < positionAttribute.count; i++) {
-        vertexColors[i * 3] = defaultColor[0];
-        vertexColors[i * 3 + 1] = defaultColor[1];
-        vertexColors[i * 3 + 2] = defaultColor[2];
+      // Determine the color of each original index (0 to 18438)
+      const originalCount = geom.attributes.position.count;
+      const originalColors = new Float32Array(originalCount * 3);
+      for (let i = 0; i < originalCount; i++) {
+        originalColors[i * 3] = defaultColor[0];
+        originalColors[i * 3 + 1] = defaultColor[1];
+        originalColors[i * 3 + 2] = defaultColor[2];
       }
       
       const applyGroupColor = (indices: number[], col: number[]) => {
         for (const idx of indices) {
-          if (idx < positionAttribute.count) {
-            vertexColors[idx * 3] = col[0];
-            vertexColors[idx * 3 + 1] = col[1];
-            vertexColors[idx * 3 + 2] = col[2];
+          if (idx < originalCount) {
+            originalColors[idx * 3] = col[0];
+            originalColors[idx * 3 + 1] = col[1];
+            originalColors[idx * 3 + 2] = col[2];
           }
         }
       };
@@ -106,6 +111,25 @@ const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors
       applyGroupColor(vertexMapping.shorts, shortsColor);
       applyGroupColor(vertexMapping.socks, socksColor);
       
+      // Now map these original colors to the non-indexed vertices
+      // For each non-indexed vertex 'i', the original index was geom.index!.array[i]
+      const indexArray = geom.getIndex()?.array;
+      if (indexArray) {
+        for (let i = 0; i < positionAttribute.count; i++) {
+          const originalIdx = indexArray[i];
+          vertexColors[i * 3] = originalColors[originalIdx * 3];
+          vertexColors[i * 3 + 1] = originalColors[originalIdx * 3 + 1];
+          vertexColors[i * 3 + 2] = originalColors[originalIdx * 3 + 2];
+        }
+      } else {
+        // Fallback just in case PLY wasn't indexed
+        for (let i = 0; i < positionAttribute.count; i++) {
+          vertexColors[i * 3] = originalColors[i * 3] ?? defaultColor[0];
+          vertexColors[i * 3 + 1] = originalColors[i * 3 + 1] ?? defaultColor[1];
+          vertexColors[i * 3 + 2] = originalColors[i * 3 + 2] ?? defaultColor[2];
+        }
+      }
+
       fbxGeometry.setAttribute('color', new THREE.BufferAttribute(vertexColors, 3));
     }
     

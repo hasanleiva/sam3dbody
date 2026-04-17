@@ -23,12 +23,11 @@ function Loader() {
 }
 
 import vertexMapping from '../vertex_mapping.json';
-import { Base64FBXLoader } from './Base64FBXLoader';
 
 const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors?: { jersey: string, shorts: string, socks: string, body: string } }) => {
   const plyGeometry = useLoader(PLYLoader, url);
-  // Using our custom async base64 fetch loader to bypass git corruptions and prevent main-thread freezing context loss!
-  const fbx = useLoader(Base64FBXLoader, '/ply_sam3dbody_rigged_withcloth.b64') as THREE.Group;
+  // Using native FBXLoader with our .glb file to avoid dataURI length and github text corruption simultaneously!
+  const fbx = useLoader(FBXLoader, '/ply_sam3dbody_rigged_withcloth.glb') as THREE.Group;
   
   const finalMesh = useMemo(() => {
     // 1. Process the PLY geometry positions (center and scale as before)

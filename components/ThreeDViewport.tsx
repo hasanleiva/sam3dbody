@@ -26,8 +26,19 @@ import vertexMapping from '../vertex_mapping.json';
 
 const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors?: { jersey: string, shorts: string, socks: string, body: string } }) => {
   const plyGeometry = useLoader(PLYLoader, url);
-  // Using FBXLoader directly but with .glb extension to bypass deployment corruption
-  const fbx = useLoader(FBXLoader, '/ply_sam3dbody_rigged_nocloth.glb');
+  // Fetch text Base64 to entirely bypass Git/Cloudflare auto-crlf binary corruption
+  const b64Text = useLoader(THREE.FileLoader, '/ply_sam3dbody_rigged_withcloth.b64') as unknown as string;
+  const fbx = useMemo(() => {
+    const binaryString = window.atob(b64Text);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    const loader = new FBXLoader();
+    const parsedFbx = loader.parse(bytes.buffer, '');
+    return parsedFbx as THREE.Group;
+  }, [b64Text]);
   
   const finalMesh = useMemo(() => {
     // 1. Process the PLY geometry positions (center and scale as before)

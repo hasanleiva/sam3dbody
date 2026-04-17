@@ -23,11 +23,19 @@ function Loader() {
 }
 
 import vertexMapping from '../vertex_mapping.json';
+import { gunzipSync } from 'fflate';
 
 const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors?: { jersey: string, shorts: string, socks: string, body: string } }) => {
   const plyGeometry = useLoader(PLYLoader, url);
-  // Using native FBXLoader with our .glb file to avoid dataURI length and github text corruption simultaneously!
-  const fbx = useLoader(FBXLoader, '/ply_sam3dbody_rigged_withcloth.glb') as THREE.Group;
+  // Using native FileLoader to securely load strict gzip binary, unconditionally avoiding any GitHub or Cloudflare CRLF auto-corruption.
+  const fbxBuffer = useLoader(THREE.FileLoader, '/ply_sam3dbody_rigged_withcloth.fbx.gz', (loader) => {
+    loader.setResponseType('arraybuffer');
+  }) as unknown as ArrayBuffer;
+
+  const fbx = useMemo(() => {
+    const decompressed = gunzipSync(new Uint8Array(fbxBuffer));
+    return new FBXLoader().parse(decompressed.buffer, '') as THREE.Group;
+  }, [fbxBuffer]);
   
   const finalMesh = useMemo(() => {
     // 1. Process the PLY geometry positions (center and scale as before)

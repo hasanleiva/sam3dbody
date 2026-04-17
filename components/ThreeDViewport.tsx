@@ -1,6 +1,6 @@
 import React, { Suspense, useMemo, useCallback, useRef, useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress, Line, Text, TransformControls, Html } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress, Line, Text, TransformControls, Html, useFBX } from '@react-three/drei';
 import { HumanModel } from './HumanModel';
 import { DetectedPerson, CalibrationPoint, DistanceMeasurement, BillboardData } from '../types';
 import { PITCH_LINES } from '../utils/homography';
@@ -25,10 +25,12 @@ function Loader() {
 import vertexMapping from '../vertex_mapping.json';
 
 const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors?: { jersey: string, shorts: string, socks: string, body: string } }) => {
-  const geometry = useLoader(PLYLoader, url);
+  const plyGeometry = useLoader(PLYLoader, url);
+  const fbx = useFBX('/ply_sam3dbody_rigged_nocloth.fbx');
   
-  const clonedGeometry = useMemo(() => {
-    const geom = geometry.clone();
+  const finalMesh = useMemo(() => {
+    // 1. Process the PLY geometry positions (center and scale as before)
+    const geom = plyGeometry.clone();
     geom.computeBoundingBox();
     const center = new THREE.Vector3();
     geom.boundingBox?.getCenter(center);
@@ -41,16 +43,38 @@ const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors
     
     geom.computeBoundingBox();
     geom.translate(0, -geom.boundingBox!.min.y, 0);
+
+    // 2. Find the mesh inside the FBX
+    let targetMesh: THREE.Mesh | THREE.SkinnedMesh | null = null;
+    fbx.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh && !targetMesh) {
+        targetMesh = child as THREE.Mesh;
+      }
+    });
+
+    if (!targetMesh) return null;
+
+    // 3. Create a new geometry based on the FBX's topology, but using PLY positions
+    const fbxGeometry = targetMesh.geometry.clone();
     
+    // Copy positions from PLY geometry to FBX geometry
+    // Assuming identical vertex count and ordering
+    if (geom.attributes.position.count === fbxGeometry.attributes.position.count) {
+      fbxGeometry.setAttribute('position', geom.attributes.position);
+    } else {
+      console.warn("Vertex count mismatch! PLY:", geom.attributes.position.count, "FBX:", fbxGeometry.attributes.position.count);
+      fbxGeometry.setAttribute('position', geom.attributes.position);
+    }
+
+    // 4. Handle Colors (Vertex painting like before)
     if (colors) {
-      const positionAttribute = geom.attributes.position;
+      const positionAttribute = fbxGeometry.attributes.position;
       const vertexColors = new Float32Array(positionAttribute.count * 3);
       
       const parseColor = (hexStr: string) => {
         const c = new THREE.Color(hexStr);
         const hsl = { h: 0, s: 0, l: 0 };
         c.getHSL(hsl);
-        // Boost saturation and lightness for more "colorful" look
         c.setHSL(hsl.h, Math.min(1, hsl.s * 1.2), Math.min(1, hsl.l * 1.05));
         return [c.r, c.g, c.b];
       };
@@ -59,9 +83,8 @@ const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors
       const jerseyColor = parseColor(colors.jersey);
       const shortsColor = parseColor(colors.shorts);
       const socksColor = parseColor(colors.socks);
-      const bodyColor = parseColor('#e0ac69'); // More natural skin tone for body
+      const bodyColor = parseColor('#e0ac69');
       
-      // Initialize with default color
       for (let i = 0; i < positionAttribute.count; i++) {
         vertexColors[i * 3] = defaultColor[0];
         vertexColors[i * 3 + 1] = defaultColor[1];
@@ -83,24 +106,30 @@ const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors
       applyGroupColor(vertexMapping.shorts, shortsColor);
       applyGroupColor(vertexMapping.socks, socksColor);
       
-      geom.setAttribute('color', new THREE.BufferAttribute(vertexColors, 3));
+      fbxGeometry.setAttribute('color', new THREE.BufferAttribute(vertexColors, 3));
     }
     
-    geom.computeVertexNormals();
-    return geom;
-  }, [geometry, color, colors?.jersey, colors?.shorts, colors?.socks, colors?.body]);
+    fbxGeometry.computeVertexNormals();
+    
+    // 5. Create the new static mesh
+    const material = new THREE.MeshStandardMaterial({
+      vertexColors: fbxGeometry.hasAttribute('color'),
+      color: fbxGeometry.hasAttribute('color') ? undefined : color,
+      roughness: 0.4,
+      metalness: 0.1,
+      envMapIntensity: 1.2
+    });
 
-  return (
-    <mesh geometry={clonedGeometry} castShadow receiveShadow>
-      <meshStandardMaterial 
-        vertexColors={clonedGeometry.hasAttribute('color')} 
-        color={clonedGeometry.hasAttribute('color') ? undefined : color} 
-        roughness={0.4}
-        metalness={0.1}
-        envMapIntensity={1.2}
-      />
-    </mesh>
-  );
+    const mesh = new THREE.Mesh(fbxGeometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    
+    return mesh;
+  }, [plyGeometry, fbx, color, colors]);
+
+  if (!finalMesh) return null;
+
+  return <primitive object={finalMesh} />;
 };
 
 interface ThreeDViewportProps {

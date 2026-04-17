@@ -23,22 +23,12 @@ function Loader() {
 }
 
 import vertexMapping from '../vertex_mapping.json';
+import { Base64FBXLoader } from './Base64FBXLoader';
 
 const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors?: { jersey: string, shorts: string, socks: string, body: string } }) => {
   const plyGeometry = useLoader(PLYLoader, url);
-  // Fetch text Base64 to entirely bypass Git/Cloudflare auto-crlf binary corruption
-  const b64Text = useLoader(THREE.FileLoader, '/ply_sam3dbody_rigged_withcloth.b64') as unknown as string;
-  const fbx = useMemo(() => {
-    const binaryString = window.atob(b64Text);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }
-    const loader = new FBXLoader();
-    const parsedFbx = loader.parse(bytes.buffer, '');
-    return parsedFbx as THREE.Group;
-  }, [b64Text]);
+  // Using our custom async base64 fetch loader to bypass git corruptions and prevent main-thread freezing context loss!
+  const fbx = useLoader(Base64FBXLoader, '/ply_sam3dbody_rigged_withcloth.b64') as THREE.Group;
   
   const finalMesh = useMemo(() => {
     // 1. Process the PLY geometry positions (center and scale as before)

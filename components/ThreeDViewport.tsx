@@ -5,7 +5,7 @@ import { HumanModel } from './HumanModel';
 import { DetectedPerson, CalibrationPoint, DistanceMeasurement, BillboardData } from '../types';
 import { PITCH_LINES } from '../utils/homography';
 import * as THREE from 'three';
-import { PLYLoader } from 'three-stdlib';
+import { PLYLoader, FBXLoader } from 'three-stdlib';
 import { useLoader } from '@react-three/fiber';
 
 declare const cv: any;
@@ -26,7 +26,8 @@ import vertexMapping from '../vertex_mapping.json';
 
 const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors?: { jersey: string, shorts: string, socks: string, body: string } }) => {
   const plyGeometry = useLoader(PLYLoader, url);
-  const fbx = useFBX('/ply_sam3dbody_rigged_nocloth.fbx');
+  // Using FBXLoader directly but with .glb extension to bypass deployment corruption
+  const fbx = useLoader(FBXLoader, '/ply_sam3dbody_rigged_nocloth.glb');
   
   const finalMesh = useMemo(() => {
     // 1. Process the PLY geometry positions (center and scale as before)

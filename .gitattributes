@@ -1,0 +1,11 @@
+*.fbx binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.mp4 binary
+*.webm binary
+*.glb binary
+*.ply binary
+*.gltf text

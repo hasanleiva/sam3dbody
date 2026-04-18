@@ -18,6 +18,7 @@ export interface DetectedPerson {
   };
   worldPos?: [number, number]; // [x, y] in meters on the pitch
   meshUrl?: string;
+  textureUrl?: string; // Adding textureUrl optional property
   colors?: {
     jersey: string;
     shorts: string;

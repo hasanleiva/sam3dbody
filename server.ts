@@ -5,6 +5,8 @@ import * as admin from "firebase-admin";
 import { fal } from "@fal-ai/client";
 import dotenv from "dotenv";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import fs from "fs";
+import path from "path";
 
 dotenv.config();
 
@@ -204,6 +206,48 @@ app.get("/api/fal-scan/status/:requestId", verifyToken, async (req: any, res: an
   } catch (error: any) {
     console.error("Fal.ai API Status Error:", error);
     res.status(500).json({ error: error.message || "Failed to check status" });
+  }
+});
+
+// API Route to list textures
+app.get("/api/textures", (req: any, res: any) => {
+  const dir = process.env.NODE_ENV === "production"
+    ? path.join(process.cwd(), "dist", "textures")
+    : path.join(process.cwd(), "public", "textures");
+  
+  if (!fs.existsSync(dir)) {
+    return res.json({ textures: [] });
+  }
+
+  try {
+    const files = fs.readdirSync(dir);
+    const textures = files
+      .filter((f) => /\.(png|jpe?g|svg|webp)$/i.test(f))
+      .map((f) => ({ name: f, path: `/textures/${f}` }));
+    res.json({ textures });
+  } catch (e) {
+    res.json({ textures: [] });
+  }
+});
+
+// API Route to list HDR maps
+app.get("/api/hdr", (req: any, res: any) => {
+  const dir = process.env.NODE_ENV === "production"
+    ? path.join(process.cwd(), "dist", "hdr")
+    : path.join(process.cwd(), "public", "hdr");
+  
+  if (!fs.existsSync(dir)) {
+    return res.json({ hdrs: [] });
+  }
+
+  try {
+    const files = fs.readdirSync(dir);
+    const hdrs = files
+      .filter((f) => /\.(hdr)$/i.test(f))
+      .map((f) => ({ name: f, path: `/hdr/${f}` }));
+    res.json({ hdrs });
+  } catch (e) {
+    res.json({ hdrs: [] });
   }
 });
 

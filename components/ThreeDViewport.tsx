@@ -1,12 +1,15 @@
 import React, { Suspense, useMemo, useCallback, useRef, useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress, Line, Text, TransformControls, Html, useFBX } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress, Line, Text, TransformControls, Html } from '@react-three/drei';
+import { EffectComposer, Bloom, ChromaticAberration, Noise, Vignette } from '@react-three/postprocessing';
+import { BlendFunction } from 'postprocessing';
+import { Settings2 } from 'lucide-react';
 import { HumanModel } from './HumanModel';
 import { DetectedPerson, CalibrationPoint, DistanceMeasurement, BillboardData } from '../types';
 import { PITCH_LINES } from '../utils/homography';
 import * as THREE from 'three';
-import { PLYLoader, FBXLoader } from 'three-stdlib';
-import { useLoader } from '@react-three/fiber';
+import { PLYLoader, FBXLoader, SkeletonUtils } from 'three-stdlib';
+import { useLoader, useThree } from '@react-three/fiber';
 
 declare const cv: any;
 
@@ -23,146 +26,201 @@ function Loader() {
 }
 
 import vertexMapping from '../vertex_mapping.json';
-import { gunzipSync } from 'fflate';
 
-const PersonMesh = ({ url, color, colors }: { url: string, color: string, colors?: { jersey: string, shorts: string, socks: string, body: string } }) => {
+import { extractRigPose } from '../utils/poseExtractor';
+
+const PersonMesh = ({ url, color, colors, textureUrl }: { url: string, color: string, colors?: { jersey: string, shorts: string, socks: string, body: string }, textureUrl?: string }) => {
   const plyGeometry = useLoader(PLYLoader, url);
-  // Using native FileLoader to securely load strict gzip binary, unconditionally avoiding any GitHub or Cloudflare CRLF auto-corruption.
-  const fbxBuffer = useLoader(THREE.FileLoader, '/ply_sam3dbody_rigged_withcloth.fbx.gz', (loader) => {
-    loader.setResponseType('arraybuffer');
-  }) as unknown as ArrayBuffer;
+  const fbxRigGroup = useLoader(FBXLoader, '/models/mesh_rig.fbx');
+  const fbxClothGroup = useLoader(FBXLoader, '/models/mesh_rig_cloth.fbx');
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
 
-  const fbx = useMemo(() => {
-    const decompressed = gunzipSync(new Uint8Array(fbxBuffer));
-    return new FBXLoader().parse(decompressed.buffer, '') as THREE.Group;
-  }, [fbxBuffer]);
-  
-  const finalMesh = useMemo(() => {
-    // 1. Process the PLY geometry positions (center and scale as before)
-    const geom = plyGeometry.clone();
-    geom.computeBoundingBox();
-    const center = new THREE.Vector3();
-    geom.boundingBox?.getCenter(center);
-    geom.translate(-center.x, -center.y, -center.z);
-    
-    const size = new THREE.Vector3();
-    geom.boundingBox?.getSize(size);
-    const scale = 1.8 / size.y;
-    geom.scale(scale, scale, scale);
-    
-    geom.computeBoundingBox();
-    geom.translate(0, -geom.boundingBox!.min.y, 0);
-
-    // 2. Find the mesh inside the FBX
-    let targetMesh: THREE.Mesh | THREE.SkinnedMesh | null = null;
-    fbx.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh && !targetMesh) {
-        targetMesh = child as THREE.Mesh;
-      }
-    });
-
-    if (!targetMesh) return null;
-
-    // 3. Create a new geometry based on the FBX's topology, but using PLY positions
-    const fbxGeometry = targetMesh.geometry.clone();
-    
-    // PLY is indexed (18,439 vertices), FBX is non-indexed (110,622). We must convert PLY to non-indexed.
-    const nonIndexedGeom = geom.toNonIndexed();
-    
-    // Copy positions from non-indexed PLY geometry to FBX geometry
-    if (nonIndexedGeom.attributes.position.count === fbxGeometry.attributes.position.count) {
-      fbxGeometry.setAttribute('position', nonIndexedGeom.attributes.position);
+  useEffect(() => {
+    if (textureUrl) {
+      new THREE.TextureLoader().load(textureUrl, (t) => {
+        t.colorSpace = THREE.SRGBColorSpace;
+        // FBX models often need flipY inverted from whatever is failing.
+        // If false didn't work, try true. Default in Three is true.
+        t.flipY = true;
+        // Also add repeat wrapping just in case UVs are out of 0-1 bounds
+        t.wrapS = THREE.RepeatWrapping;
+        t.wrapT = THREE.RepeatWrapping;
+        t.needsUpdate = true;
+        setTexture(t);
+      });
     } else {
-      console.warn("Vertex count mismatch! nonIndexed PLY:", nonIndexedGeom.attributes.position.count, "FBX:", fbxGeometry.attributes.position.count);
-      fbxGeometry.setAttribute('position', nonIndexedGeom.attributes.position);
+      setTexture(null);
     }
-
-    // 4. Handle Colors (Vertex painting like before)
-    if (colors) {
-      const positionAttribute = fbxGeometry.attributes.position; // 110622
-      const vertexColors = new Float32Array(positionAttribute.count * 3);
-      
-      const parseColor = (hexStr: string) => {
-        const c = new THREE.Color(hexStr);
-        const hsl = { h: 0, s: 0, l: 0 };
-        c.getHSL(hsl);
-        c.setHSL(hsl.h, Math.min(1, hsl.s * 1.2), Math.min(1, hsl.l * 1.05));
-        return [c.r, c.g, c.b];
-      };
-      
-      const defaultColor = parseColor(color);
-      const jerseyColor = parseColor(colors.jersey);
-      const shortsColor = parseColor(colors.shorts);
-      const socksColor = parseColor(colors.socks);
-      const bodyColor = parseColor('#e0ac69');
-      
-      // Determine the color of each original index (0 to 18438)
-      const originalCount = geom.attributes.position.count;
-      const originalColors = new Float32Array(originalCount * 3);
-      for (let i = 0; i < originalCount; i++) {
-        originalColors[i * 3] = defaultColor[0];
-        originalColors[i * 3 + 1] = defaultColor[1];
-        originalColors[i * 3 + 2] = defaultColor[2];
-      }
-      
-      const applyGroupColor = (indices: number[], col: number[]) => {
-        for (const idx of indices) {
-          if (idx < originalCount) {
-            originalColors[idx * 3] = col[0];
-            originalColors[idx * 3 + 1] = col[1];
-            originalColors[idx * 3 + 2] = col[2];
-          }
-        }
-      };
-      
-      applyGroupColor(vertexMapping.body, bodyColor);
-      applyGroupColor(vertexMapping.jersey, jerseyColor);
-      applyGroupColor(vertexMapping.shorts, shortsColor);
-      applyGroupColor(vertexMapping.socks, socksColor);
-      
-      // Now map these original colors to the non-indexed vertices
-      // For each non-indexed vertex 'i', the original index was geom.index!.array[i]
-      const indexArray = geom.getIndex()?.array;
-      if (indexArray) {
-        for (let i = 0; i < positionAttribute.count; i++) {
-          const originalIdx = indexArray[i];
-          vertexColors[i * 3] = originalColors[originalIdx * 3];
-          vertexColors[i * 3 + 1] = originalColors[originalIdx * 3 + 1];
-          vertexColors[i * 3 + 2] = originalColors[originalIdx * 3 + 2];
-        }
-      } else {
-        // Fallback just in case PLY wasn't indexed
-        for (let i = 0; i < positionAttribute.count; i++) {
-          vertexColors[i * 3] = originalColors[i * 3] ?? defaultColor[0];
-          vertexColors[i * 3 + 1] = originalColors[i * 3 + 1] ?? defaultColor[1];
-          vertexColors[i * 3 + 2] = originalColors[i * 3 + 2] ?? defaultColor[2];
-        }
-      }
-
-      fbxGeometry.setAttribute('color', new THREE.BufferAttribute(vertexColors, 3));
-    }
+  }, [textureUrl]);
+  
+  const { finalScene, scaleOffset, yOffset, xOffset, zOffset } = useMemo(() => {
+    const rawSize = new THREE.Vector3();
+    plyGeometry.computeBoundingBox();
+    plyGeometry.boundingBox?.getSize(rawSize);
     
-    fbxGeometry.computeVertexNormals();
+    // Calculate how much we need to scale the mesh to reach 1.8m
+    const targetScale = 1.8 / rawSize.y;
     
-    // 5. Create the new static mesh
-    const material = new THREE.MeshStandardMaterial({
-      vertexColors: fbxGeometry.hasAttribute('color'),
-      color: fbxGeometry.hasAttribute('color') ? undefined : color,
-      roughness: 0.4,
-      metalness: 0.1,
-      envMapIntensity: 1.2
+    // To position correctly after scaling
+    const center = new THREE.Vector3();
+    plyGeometry.boundingBox?.getCenter(center);
+    const scaledMinY = plyGeometry.boundingBox!.min.y * targetScale;
+    const yOffset = -scaledMinY;
+
+    const rigScene = SkeletonUtils.clone(fbxRigGroup) as THREE.Group;
+    const clothScene = SkeletonUtils.clone(fbxClothGroup) as THREE.Group;
+    
+    // Enable shadows on the cloth scene and ensure unique geometry/materials
+    clothScene.traverse(child => {
+        if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            
+            // Clone geometry so vertex colors are unique to this mesh instance
+            mesh.geometry = mesh.geometry.clone();
+
+            // Clone materials so textures/colors are unique to this mesh instance
+            if (mesh.material) {
+                if (Array.isArray(mesh.material)) {
+                    mesh.material = mesh.material.map(m => m.clone());
+                } else {
+                    mesh.material = mesh.material.clone();
+                }
+
+                const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                materials.forEach(m => {
+                    const stdMat = m as THREE.MeshStandardMaterial;
+                    if (stdMat) {
+                        // Will be overridden later, but set safe defaults
+                        stdMat.roughness = 0.5;
+                        stdMat.metalness = 0.1;
+                    }
+                });
+            }
+        }
+    });
+    
+    let rigSkinnedMesh: THREE.SkinnedMesh | null = null;
+    rigScene.traverse(child => {
+      if ((child as THREE.SkinnedMesh).isSkinnedMesh) rigSkinnedMesh = child as THREE.SkinnedMesh;
+    });
+    
+    let clothSkinnedMesh: THREE.SkinnedMesh | null = null;
+    clothScene.traverse(child => {
+      if ((child as THREE.SkinnedMesh).isSkinnedMesh) clothSkinnedMesh = child as THREE.SkinnedMesh;
     });
 
-    const mesh = new THREE.Mesh(fbxGeometry, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    if (rigSkinnedMesh && clothSkinnedMesh) {
+      // PLY files are often indexed (e.g. 6890 verts), 
+      // while FBX loaders often unroll meshes into non-indexed (e.g. 110622 verts).
+      // If topologies are exactly the same, their non-indexed forms will align perfectly 1-to-1!
+      const unrolledPly = plyGeometry.index ? plyGeometry.toNonIndexed() : plyGeometry;
+
+      // Extract pose using original PLY vertex positions (unscaled)
+      extractRigPose(rigSkinnedMesh, unrolledPly.attributes.position.array);
+      
+      const rigBones: Record<string, THREE.Bone> = {};
+      rigSkinnedMesh.skeleton.bones.forEach(b => rigBones[b.name] = b);
+      
+      clothSkinnedMesh.skeleton.bones.forEach(clothBone => {
+        const rigBone = rigBones[clothBone.name];
+        if (rigBone) {
+          clothBone.position.copy(rigBone.position);
+          clothBone.quaternion.copy(rigBone.quaternion);
+          clothBone.scale.copy(rigBone.scale);
+        }
+      });
+      
+      // Try to copy vertex colors from the PLY mesh to the cloth mesh!
+      if (unrolledPly.attributes.color) {
+        clothSkinnedMesh.geometry.setAttribute('color', unrolledPly.attributes.color);
+      }
+      
+      clothScene.traverse(child => {
+        if ((child as THREE.Mesh).isMesh) {
+          const mesh = child as THREE.Mesh;
+          const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          
+          materials.forEach(m => {
+            const mat = m as THREE.MeshStandardMaterial;
+            if (mat) {
+              // Material settings — low roughness/metalness for brighter look
+              mat.roughness = 0.4;
+              mat.metalness = 0.0;
+              mat.envMapIntensity = 4.0;
+
+              if (texture) {
+                // Texture mode: boost via emissiveMap
+                mat.map = texture;
+                mat.emissiveMap = texture;
+                mat.emissive.set(0xffffff);
+                mat.emissiveIntensity = 0.5;
+                mat.vertexColors = false;
+                mat.color.set(0xffffff);
+                mat.needsUpdate = true;
+              } else if (unrolledPly.attributes.color) {
+                // Vertex color mode: emissive white tint to lift dark colors
+                mat.vertexColors = true;
+                mat.map = null;
+                mat.emissiveMap = null;
+                mat.emissive.set(0x888888);
+                mat.emissiveIntensity = 0.5;
+                mat.color.set(0xffffff);
+                mat.needsUpdate = true;
+              } else {
+                // Solid color fallback
+                const baseColor = new THREE.Color(colors?.jersey || color || 0xcccccc);
+                mat.vertexColors = false;
+                mat.map = null;
+                mat.emissiveMap = null;
+                mat.emissive.copy(baseColor);
+                mat.emissiveIntensity = 0.5;
+                mat.color.copy(baseColor);
+                mat.needsUpdate = true;
+              }
+            }
+          });
+        }
+      });
+
+      clothScene.updateMatrixWorld(true);
+    }
     
-    return mesh;
-  }, [plyGeometry, fbx, color, colors]);
+    // Evaluate cloth dimensions fully to ensure exact 1.8 scale on screen.
+    const clothBox = new THREE.Box3().setFromObject(clothScene);
+    const clothSize = new THREE.Vector3();
+    clothBox.getSize(clothSize);
+    
+    let adjustedScale = 1.0;
+    let adjustedYOffset = 0;
+    let adjustedXOffset = 0;
+    let adjustedZOffset = 0;
+    
+    if (clothSize.y > 0) {
+        adjustedScale = 1.8 / clothSize.y;
+        adjustedYOffset = -(clothBox.min.y * adjustedScale);
+        
+        const clothCenter = new THREE.Vector3();
+        clothBox.getCenter(clothCenter);
+        adjustedXOffset = -(clothCenter.x * adjustedScale);
+        adjustedZOffset = -(clothCenter.z * adjustedScale);
+    }
 
-  if (!finalMesh) return null;
+    return { finalScene: clothScene, scaleOffset: adjustedScale, yOffset: adjustedYOffset, xOffset: adjustedXOffset, zOffset: adjustedZOffset };
+  }, [plyGeometry, fbxRigGroup, fbxClothGroup, color, colors, texture]);
 
-  return <primitive object={finalMesh} />;
+  if (!finalScene) return null;
+
+  return (
+    <group position={[xOffset, yOffset, zOffset]} scale={[scaleOffset, scaleOffset, scaleOffset]}>
+      {/* 
+        The SAM3D mesh might have X/Z offsets that we need to cancel out to place it exactly at 0,0 locally.
+        We wrap it in a centered scaled primitive.
+       */}
+      <primitive object={finalScene} />
+    </group>
+  );
 };
 
 interface ThreeDViewportProps {
@@ -233,7 +291,7 @@ const PersonGroup = ({
         {isSelected && activeTool !== 'transform' ? (
           <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
             {person.meshUrl ? (
-              <PersonMesh url={person.meshUrl} color="#FC3434" colors={person.colors} />
+              <PersonMesh url={person.meshUrl} color="#FC3434" colors={person.colors} textureUrl={person.textureUrl} />
             ) : (
               <HumanModel 
                 rotation={[0, 0, 0]} 
@@ -245,7 +303,7 @@ const PersonGroup = ({
           </Float>
         ) : (
           person.meshUrl ? (
-            <PersonMesh url={person.meshUrl} color={isSelected ? "#FC3434" : "#999"} colors={person.colors} />
+            <PersonMesh url={person.meshUrl} color={isSelected ? "#FC3434" : "#999"} colors={person.colors} textureUrl={person.textureUrl} />
           ) : (
             <HumanModel 
               rotation={[0, 0, 0]} 
@@ -582,25 +640,50 @@ const Pitch3D: React.FC<{ onClick?: (point: [number, number, number]) => void }>
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
-    // Grass Base
-    ctx.fillStyle = '#4a8c42';
+    // Grass Base (Realistic green)
+    ctx.fillStyle = '#4f7b2c';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Mown Grass Stripes
-    const stripeCount = 12;
+    // Mown Grass Stripes (18 stripes for a 105m pitch = ~5.8m each)
+    const stripeCount = 18;
     const stripeWidth = canvas.width / stripeCount;
     for (let i = 0; i < stripeCount; i++) {
       if (i % 2 === 0) {
-        ctx.fillStyle = '#3e7537';
+        ctx.fillStyle = '#446c24';
         ctx.fillRect(i * stripeWidth, 0, stripeWidth, canvas.height);
       }
+    }
+
+    // Add realistic noise layer
+    const noiseCanvas = document.createElement('canvas');
+    noiseCanvas.width = 256;
+    noiseCanvas.height = 256;
+    const nCtx = noiseCanvas.getContext('2d');
+    if (nCtx) {
+        const idata = nCtx.createImageData(256, 256);
+        const buf32 = new Uint32Array(idata.data.buffer);
+        for (let i = 0; i < buf32.length; i++) {
+           const isDark = Math.random() > 0.5;
+           const alpha = (Math.random() * 25 | 0); // 0 to 25 opacity
+           if (isDark) {
+               // Black noise
+               buf32[i] = (alpha << 24) | (0 << 16) | (0 << 8) | 0; 
+           } else {
+               // Yellow/White bright noise
+               buf32[i] = ((alpha) << 24) | (200 << 16) | (230 << 8) | 200; 
+           }
+        }
+        nCtx.putImageData(idata, 0, 0);
+        
+        ctx.fillStyle = ctx.createPattern(noiseCanvas, 'repeat')!;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
     // Scaling factors from world (105x68) to canvas
     const scaleX = canvas.width / 105;
     const scaleY = canvas.height / 68;
 
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'; // Slightly softer white
     ctx.lineWidth = 4;
     ctx.lineCap = 'round';
 
@@ -717,6 +800,48 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
   const containerRef = React.useRef<HTMLDivElement>(null);
   const cameraRef = React.useRef<THREE.PerspectiveCamera>(null);
   const controlsRef = React.useRef<any>(null);
+
+  const [showPostProcessModal, setShowPostProcessModal] = useState(false);
+  const [availableHdrs, setAvailableHdrs] = useState<{name: string, path: string}[]>([]);
+  const [ppSettings, setPpSettings] = useState(() => {
+    const defaultSettings = {
+      hdr: '',
+      envPreset: 'city',
+      bloom: true,
+      bloomIntensity: 1.0,
+      bloomLuminanceThreshold: 0.9,
+      chromaticAberration: true,
+      chromaticAberrationOffset: 0.0015,
+      vignette: true,
+      vignetteDarkness: 0.5,
+      noise: true,
+      noiseOpacity: 0.05,
+      exposure: 1.0
+    };
+    try {
+      const saved = localStorage.getItem('3d_pp_settings');
+      if (saved) return { ...defaultSettings, ...JSON.parse(saved) };
+    } catch(e) {}
+    return defaultSettings;
+  });
+
+  useEffect(() => {
+    fetch('/api/hdr')
+      .then(res => res.json())
+      .then(data => {
+        if (data.hdrs) setAvailableHdrs(data.hdrs);
+      })
+      .catch(err => console.error("Failed to load HDRs", err));
+  }, []);
+
+  const RendererSettings = () => {
+    const { gl } = useThree();
+    useEffect(() => {
+      gl.toneMapping = THREE.ACESFilmicToneMapping;
+      gl.toneMappingExposure = ppSettings.exposure;
+    }, [gl, ppSettings.exposure]);
+    return null;
+  };
 
   const matchCameraToBroadcast = useCallback(() => {
     if (!calibrationPoints || calibrationPoints.length < 4 || !cameraRef.current || !controlsRef.current || !containerRef.current) return;
@@ -835,7 +960,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
   return (
     <div ref={containerRef} className="w-full h-full bg-[#D7D7D7] relative overflow-hidden rounded-lg">
       <Loader />
-      <Canvas shadows dpr={[1, 2]}>
+      <Canvas shadows dpr={[1, 2]} gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: ppSettings.exposure }}>
         <color attach="background" args={['#D7D7D7']} />
         <PerspectiveCamera 
           ref={cameraRef}
@@ -851,18 +976,22 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
           target={[0, 0, 0]}
         />
         
-        <ambientLight intensity={0.8} />
+        <ambientLight intensity={0.8 * ppSettings.exposure} />
         <directionalLight 
           position={[50, 50, 50]} 
-          intensity={1.5} 
+          intensity={1.5 * ppSettings.exposure} 
           castShadow 
           shadow-mapSize={[1024, 1024]}
         />
-        <pointLight position={[-30, 20, -30]} intensity={0.8} />
+        <pointLight position={[-30, 20, -30]} intensity={0.8 * ppSettings.exposure} />
 
         <Suspense fallback={null}>
-          <Environment preset="city" />
-          <ContactShadows position={[0, 0, 0]} opacity={0.5} scale={120} blur={2.5} far={10} />
+          <RendererSettings />
+          {ppSettings.hdr ? (
+            <Environment files={ppSettings.hdr} background={false} />
+          ) : (
+            <Environment preset={ppSettings.envPreset as any} />
+          )}
           
           <Pitch3D onClick={onPitchClick} />
 
@@ -974,7 +1103,36 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
             );
           })}
 
-          <ContactShadows opacity={0.6} scale={120} blur={2} far={10} resolution={512} color="#000" />
+          <ContactShadows position={[0, 0.05, 0]} opacity={0.6} scale={120} blur={2} far={10} resolution={512} color="#000" />
+          
+          <EffectComposer>
+            {ppSettings.bloom && (
+              <Bloom 
+                intensity={ppSettings.bloomIntensity} 
+                luminanceThreshold={ppSettings.bloomLuminanceThreshold} 
+                mipmapBlur 
+              />
+            )}
+            {ppSettings.chromaticAberration && (
+              <ChromaticAberration 
+                blendFunction={BlendFunction.NORMAL} 
+                offset={new THREE.Vector2(ppSettings.chromaticAberrationOffset, ppSettings.chromaticAberrationOffset)} 
+              />
+            )}
+            {ppSettings.noise && (
+              <Noise 
+                opacity={ppSettings.noiseOpacity} 
+                blendFunction={BlendFunction.OVERLAY}
+              />
+            )}
+            {ppSettings.vignette && (
+              <Vignette 
+                eskil={false} 
+                offset={0.1} 
+                darkness={ppSettings.vignetteDarkness} 
+              />
+            )}
+          </EffectComposer>
         </Suspense>
       </Canvas>
 
@@ -1046,6 +1204,154 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
             <p>Pitch: 105m x 68m</p>
             <p>Units: Metric (Meters)</p>
          </div>
+      </div>
+
+      <div className="absolute bottom-4 left-4 z-20">
+        <button
+          onClick={() => setShowPostProcessModal(!showPostProcessModal)}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/80 backdrop-blur-md border border-black/10 text-xs font-bold text-black uppercase hover:bg-white transition-colors shadow-lg"
+        >
+          <Settings2 className="w-4 h-4" />
+          Post Processing
+        </button>
+
+        {showPostProcessModal && (
+          <div className="absolute bottom-full left-0 mb-2 w-64 bg-white/95 backdrop-blur-md border border-black/10 shadow-xl rounded-xl p-3 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-black">Settings</h3>
+              <button 
+                onClick={() => setShowPostProcessModal(false)}
+                className="text-black/50 hover:text-black"
+              >
+                X
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2 max-h-[50vh] overflow-y-auto pr-2 no-scrollbar">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-[#666] uppercase">HDR Map</label>
+                <select 
+                  className="bg-black/5 p-1 rounded border border-transparent focus:border-[#FC3434] outline-none text-[10px]"
+                  value={ppSettings.hdr}
+                  onChange={(e) => setPpSettings(p => ({ ...p, hdr: e.target.value }))}
+                >
+                  <option value="">Default (City Preset)</option>
+                  {availableHdrs.map(h => (
+                    <option key={h.path} value={h.path}>{h.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-[#666] uppercase">Exposure</label>
+                <input 
+                  type="range" min="0.1" max="3" step="0.1" 
+                  value={ppSettings.exposure}
+                  onChange={(e) => setPpSettings(p => ({ ...p, exposure: parseFloat(e.target.value) }))}
+                />
+              </div>
+
+              <label className="flex items-center gap-2 text-[10px] font-bold">
+                <input 
+                  type="checkbox" 
+                  checked={ppSettings.bloom}
+                  onChange={(e) => setPpSettings(p => ({ ...p, bloom: e.target.checked }))}
+                />
+                BLOOM
+              </label>
+
+              {ppSettings.bloom && (
+                <div className="flex flex-col gap-1 pl-6">
+                  <label className="text-[9px] font-bold text-[#666] uppercase">Intensity</label>
+                  <input 
+                    type="range" min="0" max="3" step="0.1" 
+                    value={ppSettings.bloomIntensity}
+                    onChange={(e) => setPpSettings(p => ({ ...p, bloomIntensity: parseFloat(e.target.value) }))}
+                  />
+                  <label className="text-[9px] font-bold text-[#666] uppercase mt-1">Threshold</label>
+                  <input 
+                    type="range" min="0" max="1" step="0.1" 
+                    value={ppSettings.bloomLuminanceThreshold}
+                    onChange={(e) => setPpSettings(p => ({ ...p, bloomLuminanceThreshold: parseFloat(e.target.value) }))}
+                  />
+                </div>
+              )}
+
+              <label className="flex items-center gap-2 text-[10px] font-bold mt-1">
+                <input 
+                  type="checkbox" 
+                  checked={ppSettings.chromaticAberration}
+                  onChange={(e) => setPpSettings(p => ({ ...p, chromaticAberration: e.target.checked }))}
+                />
+                CHROMATIC ABERRATION
+              </label>
+
+              {ppSettings.chromaticAberration && (
+                <div className="flex flex-col gap-1 pl-6">
+                  <label className="text-[9px] font-bold text-[#666] uppercase">Offset</label>
+                  <input 
+                    type="range" min="0" max="0.005" step="0.0001" 
+                    value={ppSettings.chromaticAberrationOffset}
+                    onChange={(e) => setPpSettings(p => ({ ...p, chromaticAberrationOffset: parseFloat(e.target.value) }))}
+                  />
+                </div>
+              )}
+
+              <label className="flex items-center gap-2 text-[10px] font-bold mt-1">
+                <input 
+                  type="checkbox" 
+                  checked={ppSettings.vignette}
+                  onChange={(e) => setPpSettings(p => ({ ...p, vignette: e.target.checked }))}
+                />
+                VIGNETTE
+              </label>
+
+              {ppSettings.vignette && (
+                <div className="flex flex-col gap-1 pl-6">
+                  <label className="text-[9px] font-bold text-[#666] uppercase">Darkness</label>
+                  <input 
+                    type="range" min="0" max="1" step="0.1" 
+                    value={ppSettings.vignetteDarkness}
+                    onChange={(e) => setPpSettings(p => ({ ...p, vignetteDarkness: parseFloat(e.target.value) }))}
+                  />
+                </div>
+              )}
+
+              <label className="flex items-center gap-2 text-[10px] font-bold mt-1">
+                <input 
+                  type="checkbox" 
+                  checked={ppSettings.noise}
+                  onChange={(e) => setPpSettings(p => ({ ...p, noise: e.target.checked }))}
+                />
+                NOISE
+              </label>
+
+              {ppSettings.noise && (
+                <div className="flex flex-col gap-1 pl-6">
+                  <label className="text-[9px] font-bold text-[#666] uppercase">Opacity</label>
+                  <input 
+                    type="range" min="0" max="0.2" step="0.01" 
+                    value={ppSettings.noiseOpacity}
+                    onChange={(e) => setPpSettings(p => ({ ...p, noiseOpacity: parseFloat(e.target.value) }))}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-[#eee]">
+              <button
+                onClick={() => {
+                  localStorage.setItem('3d_pp_settings', JSON.stringify(ppSettings));
+                  setShowPostProcessModal(false);
+                }}
+                className="w-full bg-[#FC3434] text-white text-[10px] font-bold uppercase tracking-wider py-1.5 rounded hover:bg-[#e02e2e] transition-colors"
+                title="Save as default for all scenes"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

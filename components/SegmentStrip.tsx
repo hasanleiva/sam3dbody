@@ -9,15 +9,23 @@ interface SegmentStripProps {
   onUpdatePerson?: (id: string, updates: Partial<DetectedPerson>) => void;
 }
 
-const COLORS = [
-  '#FFFFFF', '#000000', '#FC3434', '#0000FF', '#00FF00', '#FFFF00', '#FFA500', '#800080', '#00FFFF', '#FFC0CB'
-];
-
 export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, onSelect, onUpdatePerson }) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number, left: number } | null>(null);
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [availableTextures, setAvailableTextures] = useState<{name: string; path: string}[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch('/api/textures')
+      .then(res => res.json())
+      .then(data => {
+        if (data.textures) {
+          setAvailableTextures(data.textures);
+        }
+      })
+      .catch(err => console.error("Failed to load textures", err));
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -37,17 +45,6 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
       window.removeEventListener('scroll', handleScroll, true);
     };
   }, [openMenuId]);
-
-  const handleColorChange = (personId: string, part: 'jersey' | 'shorts' | 'socks', color: string) => {
-    if (!onUpdatePerson) return;
-    const person = people.find(p => p.id === personId);
-    if (!person) return;
-    
-    const currentColors = person.colors || { jersey: '#ffffff', shorts: '#ffffff', socks: '#ffffff', body: '#ffccaa' };
-    onUpdatePerson(personId, {
-      colors: { ...currentColors, [part]: color }
-    });
-  };
 
   const handleJerseyClick = (e: React.MouseEvent<HTMLButtonElement>, personId: string) => {
     e.stopPropagation();
@@ -158,7 +155,7 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
       {openMenuId && menuPos && (
         <div 
           ref={menuRef}
-          className="fixed bg-white border border-[#eee] shadow-xl rounded-lg p-3 z-50 w-48 flex flex-col gap-3"
+          className="fixed bg-white border border-[#eee] shadow-xl rounded-lg p-3 z-50 w-56 flex flex-col gap-3 max-h-[60vh] overflow-y-auto no-scrollbar"
           style={{ 
             top: `${menuPos.top}px`, 
             left: `${menuPos.left}px`,
@@ -169,24 +166,32 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
           {(() => {
             const person = people.find(p => p.id === openMenuId);
             if (!person) return null;
-            return (['jersey', 'shorts', 'socks'] as const).map((part) => (
-              <div key={part} className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold uppercase text-[#666]">{part}</span>
-                <div className="flex flex-wrap gap-1">
-                  {COLORS.map(color => (
+            return (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] font-bold uppercase text-[#666]">TEXTURE</span>
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => onUpdatePerson && onUpdatePerson(person.id, { textureUrl: undefined })}
+                    className={`text-left px-2 py-1 text-xs rounded transition-colors ${!person.textureUrl ? 'bg-[#FC3434] text-white' : 'hover:bg-[#f5f5f5] text-[#333]'}`}
+                  >
+                    Default (No Texture)
+                  </button>
+                  {availableTextures.map(texture => (
                     <button
-                      key={color}
-                      onClick={() => handleColorChange(person.id, part, color)}
-                      className={`w-5 h-5 rounded-full border shadow-sm transition-transform hover:scale-110 ${
-                        person.colors?.[part] === color ? 'ring-2 ring-offset-1 ring-[#FC3434]' : 'border-black/10'
-                      }`}
-                      style={{ backgroundColor: color }}
-                      title={color}
-                    />
+                      key={texture.path}
+                      onClick={() => onUpdatePerson && onUpdatePerson(person.id, { textureUrl: texture.path })}
+                      className={`text-left px-2 py-1 text-xs rounded transition-colors truncate ${person.textureUrl === texture.path ? 'bg-[#FC3434] text-white' : 'hover:bg-[#f5f5f5] text-[#333]'}`}
+                      title={texture.name}
+                    >
+                      {texture.name}
+                    </button>
                   ))}
+                  {availableTextures.length === 0 && (
+                    <span className="text-xs text-gray-400 px-2">No textures found...</span>
+                  )}
                 </div>
               </div>
-            ));
+            );
           })()}
         </div>
       )}

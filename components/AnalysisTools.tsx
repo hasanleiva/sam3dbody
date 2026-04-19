@@ -8,6 +8,7 @@ interface AnalysisToolsProps {
   transformMode: 'translate' | 'rotate';
   setTransformMode: (mode: 'translate' | 'rotate') => void;
   measurements: DistanceMeasurement[];
+  setMeasurements: React.Dispatch<React.SetStateAction<DistanceMeasurement[]>>;
   activeMeasurementId: string | null;
   setActiveMeasurementId: (id: string | null) => void;
   onClearMeasurement: (id: string) => void;
@@ -20,6 +21,14 @@ interface AnalysisToolsProps {
   setBillboards: React.Dispatch<React.SetStateAction<BillboardData[]>>;
   selectedBillboardId: string | null;
   setSelectedBillboardId: (id: string | null) => void;
+  isCameraViewActive: boolean;
+  setIsCameraViewActive: (val: boolean) => void;
+  isCameraSettingsOpen: boolean;
+  setIsCameraSettingsOpen: (val: boolean) => void;
+  cameraSettings: import('../types').CameraSettings;
+  setCameraSettings: React.Dispatch<React.SetStateAction<import('../types').CameraSettings>>;
+  onExportImage: () => void;
+  onExportVideo: () => void;
 }
 
 export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
@@ -29,6 +38,7 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
   transformMode,
   setTransformMode,
   measurements,
+  setMeasurements,
   activeMeasurementId,
   setActiveMeasurementId,
   onClearMeasurement,
@@ -40,9 +50,18 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
   billboards,
   setBillboards,
   selectedBillboardId,
-  setSelectedBillboardId
+  setSelectedBillboardId,
+  isCameraViewActive,
+  setIsCameraViewActive,
+  isCameraSettingsOpen,
+  setIsCameraSettingsOpen,
+  cameraSettings,
+  setCameraSettings,
+  onExportImage,
+  onExportVideo
 }) => {
   const [xgValue, setXgValue] = useState<number | null>(null);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
   useEffect(() => {
     if (activeTool === 'xg' && selectedPerson && selectedPerson.worldPos) {
@@ -102,11 +121,118 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
   const activeMeasurement = measurements.find(m => m.id === activeMeasurementId);
 
   return (
-    <div className="flex flex-col h-full gap-6">
+    <div className="flex flex-col h-[calc(100vh-80px)] gap-6">
       <section>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xs font-bold text-[#666] uppercase tracking-wider">Analysis Tools</h3>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsCameraViewActive(!isCameraViewActive)}
+              className={`p-1.5 rounded-lg border transition-all ${isCameraViewActive ? 'bg-[#FC3434]/20 border-[#FC3434]/50 text-[#FC3434]' : 'bg-white border-[#eee] text-black/60 hover:bg-[#f5f5f5]'}`}
+              title="Toggle Camera View"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setIsCameraSettingsOpen(!isCameraSettingsOpen)}
+              className={`p-1.5 rounded-lg border transition-all ${isCameraSettingsOpen ? 'bg-[#FC3434]/20 border-[#FC3434]/50 text-[#FC3434]' : 'bg-white border-[#eee] text-black/60 hover:bg-[#f5f5f5]'}`}
+              title="Camera Settings"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+              className={`p-1.5 rounded-lg border transition-all ${isExportMenuOpen ? 'bg-black text-white border-black' : 'bg-white border-[#eee] text-black/60 hover:bg-[#f5f5f5]'}`}
+              title="Export"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+            </button>
+          </div>
         </div>
+
+        {isExportMenuOpen && (
+          <div className="mb-4 p-4 bg-white border border-[#eee] shadow-sm rounded-xl text-black flex gap-2">
+            <button
+              onClick={() => {
+                setIsExportMenuOpen(false);
+                onExportImage();
+              }}
+              className="flex-1 py-2 px-3 bg-[#f5f5f5] hover:bg-[#eaeaea] text-black text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+              IMAGE
+            </button>
+            <button
+              onClick={() => {
+                setIsExportMenuOpen(false);
+                onExportVideo();
+              }}
+              className="flex-1 py-2 px-3 bg-[#FC3434] hover:bg-[#e02b2b] text-white text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+              VIDEO (.MP4)
+            </button>
+          </div>
+        )}
+
+        {isCameraSettingsOpen && (
+          <div className="mb-4 p-4 bg-[#f9f9f9] border border-[#eee] rounded-xl text-black space-y-4">
+            <div>
+              <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest block mb-2">Resolution (Aspect Ratio)</label>
+              <div className="flex gap-2">
+                {['free', '16:9', '9:16', '1:1'].map(r => (
+                  <button
+                    key={r}
+                    onClick={() => setCameraSettings(s => ({ ...s, aspectRatio: r as any }))}
+                    className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg border transition-colors ${cameraSettings.aspectRatio === r ? 'bg-[#FC3434] text-white border-[#FC3434]' : 'bg-white border-[#eee] text-black/60 hover:bg-[#f0f0f0]'}`}
+                  >
+                    {r === 'free' ? 'Free' : r}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div>
+              <div className="flex justify-between mb-1">
+                <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest">Height Offset</label>
+                <span className="text-[10px] font-mono text-black/40">{cameraSettings.heightOffset.toFixed(1)}m</span>
+              </div>
+              <input 
+                type="range" 
+                min="-10" 
+                max="10" 
+                step="0.1" 
+                value={cameraSettings.heightOffset}
+                onChange={e => setCameraSettings(s => ({ ...s, heightOffset: parseFloat(e.target.value) }))}
+                className="w-full"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between mb-1">
+                <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest">Field of View (FOV)</label>
+                <span className="text-[10px] font-mono text-black/40">{cameraSettings.fov.toFixed(1)}°</span>
+              </div>
+              <input 
+                type="range" 
+                min="10" 
+                max="120" 
+                step="1" 
+                value={cameraSettings.fov}
+                onChange={e => setCameraSettings(s => ({ ...s, fov: parseFloat(e.target.value) }))}
+                className="w-full"
+              />
+            </div>
+          </div>
+        )}
         
         <div className="grid grid-cols-5 gap-2">
           {/* Transform Tool */}
@@ -291,30 +417,76 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
               )}
             </div>
             
-            <div className="space-y-2 mb-4">
+            <div className="space-y-4 mb-4">
               {measurements.filter(m => m.type === 'arrow').length === 0 && (
-                <div className="text-xs text-black/40 text-center py-4">
+                <div className="text-xs text-black/40 text-center py-4 border border-[#eee] rounded-lg">
                   Click on the pitch to draw an arrow.
                 </div>
               )}
               {measurements.filter(m => m.type === 'arrow').map((m, i) => (
-                <div key={m.id} className="flex items-center justify-between p-2 rounded-lg bg-[#f5f5f5] border border-[#eee]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-white border border-[#ddd] flex items-center justify-center text-[10px] font-bold text-black/60">
-                      {i + 1}
+                <div key={m.id} className="p-3 rounded-lg bg-[#f5f5f5] border border-[#eee] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded bg-white border border-[#ddd] flex items-center justify-center text-[10px] font-bold text-black/60">
+                        {i + 1}
+                      </div>
+                      <span className="text-xs font-medium text-black">
+                        {m.points.length === 1 ? 'Drawing...' : 'Arrow'}
+                      </span>
                     </div>
-                    <span className="text-xs font-medium text-black">
-                      {m.points.length === 1 ? 'Drawing...' : 'Arrow'}
-                    </span>
+                    <button 
+                      onClick={() => onClearMeasurement(m.id)}
+                      className="p-1 text-black/30 hover:text-red-500 hover:bg-white rounded transition-colors"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => onClearMeasurement(m.id)}
-                    className="p-1 text-black/30 hover:text-red-500 hover:bg-white rounded transition-colors"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  
+                  {m.points.length === 2 && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest block mb-1">Color</label>
+                          <input 
+                            type="color" 
+                            value={m.color || '#ffffff'} 
+                            onChange={(e) => {
+                              const newColor = e.target.value;
+                              setMeasurements(prev => prev.map(meas => meas.id === m.id ? { ...meas, color: newColor } : meas));
+                            }}
+                            className="w-full h-8 rounded cursor-pointer border border-[#ddd]" 
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest block mb-1">Text Color</label>
+                          <input 
+                            type="color" 
+                            value={m.textColor || m.color || '#ffffff'} 
+                            onChange={(e) => {
+                              const newColor = e.target.value;
+                              setMeasurements(prev => prev.map(meas => meas.id === m.id ? { ...meas, textColor: newColor } : meas));
+                            }}
+                            className="w-full h-8 rounded cursor-pointer border border-[#ddd]" 
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest block mb-1">Label</label>
+                        <input 
+                          type="text" 
+                          value={m.text || ''} 
+                          placeholder="Arrow Text..."
+                          onChange={(e) => {
+                            const newText = e.target.value;
+                            setMeasurements(prev => prev.map(meas => meas.id === m.id ? { ...meas, text: newText } : meas));
+                          }}
+                          className="w-full text-xs p-2 rounded border border-[#ddd] bg-white outline-none focus:border-[#FC3434]"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -329,9 +501,11 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
           <div className="p-4 rounded-xl bg-white border border-[#eee] shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-[10px] font-bold text-[#999] uppercase tracking-widest">Distance Measurements</h4>
-              {measurements.length > 0 && (
+              {measurements.filter(m => m.type !== 'arrow').length > 0 && (
                 <button 
-                  onClick={onClearAllMeasurements}
+                  onClick={() => {
+                    measurements.filter(m => m.type !== 'arrow').forEach(m => onClearMeasurement(m.id));
+                  }}
                   className="text-[10px] text-[#FC3434] hover:text-[#e02e2e] font-bold uppercase"
                 >
                   Clear All
@@ -340,12 +514,12 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
             </div>
             
             <div className="space-y-2 mb-4">
-              {measurements.length === 0 && (
+              {measurements.filter(m => m.type !== 'arrow').length === 0 && (
                 <div className="text-xs text-black/40 text-center py-4">
                   Click on the pitch to start measuring.
                 </div>
               )}
-              {measurements.map((m, i) => (
+              {measurements.filter(m => m.type !== 'arrow').map((m, i) => (
                 <div 
                   key={m.id}
                   onClick={() => setActiveMeasurementId(m.id)}
@@ -390,11 +564,56 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
                   </div>
 
                   {activeMeasurement.points.length === 2 && (
-                    <div className="mt-2">
-                      <div className="text-[10px] text-black/40 uppercase tracking-wider mb-1">Distance</div>
-                      <div className="text-3xl font-bold text-[#FC3434]">
-                        {calculateDistance(activeMeasurement.points).toFixed(1)} <span className="text-sm text-[#FC3434]/50">meters</span>
+                    <div className="mt-2 space-y-3">
+                      <div>
+                        <div className="text-[10px] text-black/40 uppercase tracking-wider mb-1">Distance</div>
+                        <div className="text-3xl font-bold text-[#FC3434]">
+                          {calculateDistance(activeMeasurement.points).toFixed(1)} <span className="text-sm text-[#FC3434]/50">meters</span>
+                        </div>
                       </div>
+
+                      <div className="pt-3 border-t border-[#eee] space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest block mb-1">Color</label>
+                            <input 
+                              type="color" 
+                              value={activeMeasurement.color || '#10b981'} 
+                              onChange={(e) => {
+                                const newColor = e.target.value;
+                                setMeasurements(prev => prev.map(meas => meas.id === activeMeasurement.id ? { ...meas, color: newColor } : meas));
+                              }}
+                              className="w-full h-8 rounded cursor-pointer border border-[#ddd]" 
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest block mb-1">Text Color</label>
+                            <input 
+                              type="color" 
+                              value={activeMeasurement.textColor || activeMeasurement.color || '#ef4444'} 
+                              onChange={(e) => {
+                                const newColor = e.target.value;
+                                setMeasurements(prev => prev.map(meas => meas.id === activeMeasurement.id ? { ...meas, textColor: newColor } : meas));
+                              }}
+                              className="w-full h-8 rounded cursor-pointer border border-[#ddd]" 
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest block mb-1">Label</label>
+                          <input 
+                            type="text" 
+                            value={activeMeasurement.text || ''} 
+                            placeholder="Optional Label..."
+                            onChange={(e) => {
+                              const newText = e.target.value;
+                              setMeasurements(prev => prev.map(meas => meas.id === activeMeasurement.id ? { ...meas, text: newText } : meas));
+                            }}
+                            className="w-full text-xs p-2 rounded border border-[#ddd] bg-white outline-none focus:border-[#FC3434]"
+                          />
+                        </div>
+                      </div>
+
                     </div>
                   )}
                 </div>
@@ -487,6 +706,24 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
 
             {selectedBillboardId && (
               <div className="pt-4 border-t border-[#eee]">
+                <div className="text-xs font-bold text-black mb-3">Transform Mode</div>
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <button 
+                    onClick={() => setTransformMode('translate')}
+                    className={`flex items-center gap-2 p-2 rounded-lg transition-all border ${transformMode === 'translate' ? 'bg-[#FC3434]/10 border-[#FC3434]/30 text-[#FC3434]' : 'bg-[#f5f5f5] border-transparent text-black/70 hover:bg-[#eee]'}`}
+                  >
+                    <kbd className={`px-2 py-1 rounded text-[10px] font-mono font-bold ${transformMode === 'translate' ? 'bg-[#FC3434] text-white' : 'bg-white border border-[#ddd] text-black'}`}>T</kbd>
+                    <span className="text-xs font-medium">Translate</span>
+                  </button>
+                  <button 
+                    onClick={() => setTransformMode('rotate')}
+                    className={`flex items-center gap-2 p-2 rounded-lg transition-all border ${transformMode === 'rotate' ? 'bg-[#FC3434]/10 border-[#FC3434]/30 text-[#FC3434]' : 'bg-[#f5f5f5] border-transparent text-black/70 hover:bg-[#eee]'}`}
+                  >
+                    <kbd className={`px-2 py-1 rounded text-[10px] font-mono font-bold ${transformMode === 'rotate' ? 'bg-[#FC3434] text-white' : 'bg-white border border-[#ddd] text-black'}`}>R</kbd>
+                    <span className="text-xs font-medium">Rotate</span>
+                  </button>
+                </div>
+
                 <div className="text-xs font-bold text-black mb-3">Dimensions</div>
                 
                 <div className="space-y-3">
@@ -530,7 +767,7 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
                 </div>
 
                 <div className="text-[10px] text-black/40 leading-relaxed mt-4">
-                  Use the 3D gizmo on the selected billboard to move it around the pitch.
+                  Use the 3D gizmo on the selected billboard to move or rotate it around the pitch.
                 </div>
               </div>
             )}

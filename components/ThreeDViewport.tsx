@@ -5,13 +5,72 @@ import { EffectComposer, Bloom, ChromaticAberration, Noise, Vignette } from '@re
 import { BlendFunction } from 'postprocessing';
 import { Settings2 } from 'lucide-react';
 import { HumanModel } from './HumanModel';
-import { DetectedPerson, CalibrationPoint, DistanceMeasurement, BillboardData } from '../types';
+import { DetectedPerson, CalibrationPoint, DistanceMeasurement, BillboardData, CameraSettings, CameraKeyframe } from '../types';
 import { PITCH_LINES } from '../utils/homography';
 import * as THREE from 'three';
 import { PLYLoader, FBXLoader, SkeletonUtils } from 'three-stdlib';
-import { useLoader, useThree } from '@react-three/fiber';
+import { useLoader, useThree, useFrame } from '@react-three/fiber';
 
 declare const cv: any;
+
+const CameraAnimator = ({ cameraRef, controlsRef, keyframes, isPlayingCamera, timelineTime, isCameraViewActive, cameraSettings }: any) => {
+  const lastTimeRef = useRef(timelineTime);
+
+  useFrame(() => {
+    if (!cameraRef.current || !controlsRef.current) return;
+
+    const timeChanged = lastTimeRef.current !== timelineTime;
+    lastTimeRef.current = timelineTime;
+    
+    // We only force the camera position if we are playing OR if the user scrubs the playhead.
+    const shouldEnforceCamera = isPlayingCamera || timeChanged;
+
+    if (shouldEnforceCamera && keyframes && keyframes.length > 0) {
+      const sorted = [...keyframes].sort((a, b) => a.time - b.time);
+      let k1 = sorted[0];
+      let k2 = sorted[sorted.length - 1];
+      
+      if (timelineTime <= k1.time) {
+        k2 = k1;
+      } else if (timelineTime >= k2.time) {
+        k1 = k2;
+      } else {
+        for (let i = 0; i < sorted.length - 1; i++) {
+          if (timelineTime >= sorted[i].time && timelineTime <= sorted[i+1].time) {
+            k1 = sorted[i];
+            k2 = sorted[i+1];
+            break;
+          }
+        }
+      }
+
+      if (k1 && k2) {
+        const range = k2.time - k1.time;
+        const progress = range > 0 ? (timelineTime - k1.time) / range : 0;
+        
+        cameraRef.current.position.lerpVectors(
+          new THREE.Vector3(...k1.position),
+          new THREE.Vector3(...k2.position),
+          progress
+        );
+        controlsRef.current.target.lerpVectors(
+          new THREE.Vector3(...k1.target),
+          new THREE.Vector3(...k2.target),
+          progress
+        );
+        cameraRef.current.fov = THREE.MathUtils.lerp(k1.fov, k2.fov, progress);
+        cameraRef.current.updateProjectionMatrix();
+        controlsRef.current.update();
+      }
+    } else if (isCameraViewActive && cameraSettings && !isPlayingCamera) {
+      if (Math.abs(cameraRef.current.fov - cameraSettings.fov) > 0.1) {
+        cameraRef.current.fov = cameraSettings.fov;
+        cameraRef.current.updateProjectionMatrix();
+      }
+    }
+  });
+  return null;
+};
 
 function Loader() {
   const { active, progress } = useProgress();
@@ -246,6 +305,16 @@ interface ThreeDViewportProps {
   setBillboards?: React.Dispatch<React.SetStateAction<BillboardData[]>>;
   selectedBillboardId?: string | null;
   setSelectedBillboardId?: (id: string | null) => void;
+  cameraSettings?: CameraSettings;
+  isCameraViewActive?: boolean;
+  keyframes?: CameraKeyframe[];
+  isPlayingCamera?: boolean;
+  timelineTime?: number;
+}
+
+export interface ThreeDViewportRef {
+  getCameraState: () => { position: [number, number, number], target: [number, number, number], fov: number };
+  getCanvas: () => HTMLCanvasElement | null;
 }
 
 const PersonGroup = ({ 
@@ -361,12 +430,14 @@ const BillboardGroup = ({
   isSelected,
   onSelect,
   activeTool,
+  transformMode = 'translate',
   onUpdate
 }: {
   billboard: BillboardData,
   isSelected: boolean,
   onSelect?: (id: string) => void,
   activeTool?: string | null,
+  transformMode?: 'translate' | 'rotate',
   onUpdate?: (id: string, updates: Partial<BillboardData>) => void
 }) => {
   const [target, setTarget] = useState<THREE.Group | null>(null);
@@ -378,11 +449,20 @@ const BillboardGroup = ({
       <group 
         ref={setTarget}
         position={billboard.position}
+        rotation={billboard.rotation || [0, 0, 0]}
         onClick={(e) => {
-          if (activeTool === 'billboard') {
+          if (activeTool === 'billboard' || activeTool === 'transform') {
             e.stopPropagation();
             onSelect?.(billboard.id);
           }
+        }}
+        onPointerOver={() => {
+            if (activeTool === 'billboard' || activeTool === 'transform') {
+                document.body.style.cursor = 'pointer';
+            }
+        }}
+        onPointerOut={() => {
+            document.body.style.cursor = 'auto';
         }}
       >
         <mesh position={[0, billboard.height / 2, 0]} castShadow>
@@ -391,15 +471,17 @@ const BillboardGroup = ({
         </mesh>
       </group>
 
-      {target && isSelected && activeTool === 'billboard' && (
+      {target && isSelected && (activeTool === 'billboard' || activeTool === 'transform') && (
         <TransformControls 
           object={target}
-          mode="translate"
+          mode={transformMode}
           onMouseUp={() => {
             if (onUpdate) {
               const pos = target.position;
+              const rot = target.rotation;
               onUpdate(billboard.id, {
-                position: [pos.x, pos.y, pos.z]
+                position: [pos.x, pos.y, pos.z],
+                rotation: [rot.x, rot.y, rot.z]
               });
             }
           }}
@@ -409,7 +491,7 @@ const BillboardGroup = ({
   );
 };
 
-const ArcArrow: React.FC<{ start: [number, number, number], end: [number, number, number], color: string, isActive: boolean }> = ({ start, end, color, isActive }) => {
+const ArcArrow: React.FC<{ start: [number, number, number], end: [number, number, number], color: string, isActive: boolean, text?: string, textColor?: string }> = ({ start, end, color, isActive, text, textColor }) => {
   const curve = useMemo(() => {
     const startVec = new THREE.Vector3(start[0], start[1], start[2]);
     const endVec = new THREE.Vector3(end[0], end[1], end[2]);
@@ -550,12 +632,23 @@ const ArcArrow: React.FC<{ start: [number, number, number], end: [number, number
       </mesh>
       
       {/* Main Arrow */}
-      <mesh geometry={ribbonGeometry} castShadow>
+      <mesh geometry={ribbonGeometry}>
         <meshStandardMaterial color={color} opacity={isActive ? 1 : 0.8} transparent side={THREE.DoubleSide} />
       </mesh>
-      <mesh geometry={arrowGeometry} position={arrowPosition} rotation={arrowRotation} castShadow>
+      <mesh geometry={arrowGeometry} position={arrowPosition} rotation={arrowRotation}>
         <meshStandardMaterial color={color} opacity={isActive ? 1 : 0.8} transparent side={THREE.DoubleSide} />
       </mesh>
+
+      {text && (
+        <Html position={[curve.getPoint(0.5).x, curve.getPoint(0.5).y + 0.5, curve.getPoint(0.5).z]} center zIndexRange={[100, 0]}>
+          <div 
+            className="px-2 py-1 bg-white/10 backdrop-blur-sm rounded shadow-sm font-bold text-xs whitespace-nowrap pointer-events-none"
+            style={{ color: textColor || color, textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}
+          >
+            {text}
+          </div>
+        </Html>
+      )}
     </group>
   );
 };
@@ -773,7 +866,7 @@ const Pitch3D: React.FC<{ onClick?: (point: [number, number, number]) => void }>
   );
 };
 
-export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({ 
+export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewportProps>(({ 
   selectedPerson, 
   allPeople, 
   homographyMatrix, 
@@ -795,11 +888,33 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
   billboards,
   setBillboards,
   selectedBillboardId,
-  setSelectedBillboardId
-}) => {
+  setSelectedBillboardId,
+  cameraSettings,
+  isCameraViewActive,
+  keyframes,
+  isPlayingCamera,
+  timelineTime
+}, ref) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const cameraRef = React.useRef<THREE.PerspectiveCamera>(null);
   const controlsRef = React.useRef<any>(null);
+
+  React.useImperativeHandle(ref, () => ({
+    getCameraState: () => {
+      if (!cameraRef.current || !controlsRef.current) {
+        return { position: [0, 40, 60], target: [0, 0, 0], fov: 35 };
+      }
+      return {
+        position: cameraRef.current.position.toArray() as [number, number, number],
+        target: controlsRef.current.target.toArray() as [number, number, number],
+        fov: cameraRef.current.fov
+      };
+    },
+    getCanvas: () => {
+      if (!containerRef.current) return null;
+      return containerRef.current.querySelector('canvas');
+    }
+  }));
 
   const [showPostProcessModal, setShowPostProcessModal] = useState(false);
   const [availableHdrs, setAvailableHdrs] = useState<{name: string, path: string}[]>([]);
@@ -960,7 +1075,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
   return (
     <div ref={containerRef} className="w-full h-full bg-[#D7D7D7] relative overflow-hidden rounded-lg">
       <Loader />
-      <Canvas shadows dpr={[1, 2]} gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: ppSettings.exposure }}>
+      <Canvas shadows dpr={[1, 2]} gl={{ preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: ppSettings.exposure }}>
         <color attach="background" args={['#D7D7D7']} />
         <PerspectiveCamera 
           ref={cameraRef}
@@ -974,6 +1089,15 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
           minPolarAngle={0} 
           maxPolarAngle={Math.PI / 2.1} 
           target={[0, 0, 0]}
+        />
+        <CameraAnimator 
+          cameraRef={cameraRef} 
+          controlsRef={controlsRef} 
+          keyframes={keyframes} 
+          isPlayingCamera={isPlayingCamera} 
+          timelineTime={timelineTime} 
+          isCameraViewActive={isCameraViewActive} 
+          cameraSettings={cameraSettings} 
         />
         
         <ambientLight intensity={0.8 * ppSettings.exposure} />
@@ -1022,6 +1146,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
               isSelected={b.id === selectedBillboardId}
               onSelect={setSelectedBillboardId}
               activeTool={activeTool}
+              transformMode={transformMode}
               onUpdate={(id, updates) => {
                 if (setBillboards) {
                   setBillboards(prev => prev.map(bb => bb.id === id ? { ...bb, ...updates } : bb));
@@ -1037,7 +1162,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
             const color = isActive ? "#10b981" : "#059669";
             
             if (m.type === 'arrow') {
-              const arrowColor = isActive ? "#ffffff" : "#e5e5e5";
+              const arrowColor = m.color || (isActive ? "#ffffff" : "#e5e5e5");
               return (
                 <group key={m.id}>
                   {m.points.length === 1 && (
@@ -1051,7 +1176,9 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
                       start={m.points[0]} 
                       end={m.points[1]} 
                       color={arrowColor} 
-                      isActive={isActive} 
+                      isActive={isActive}
+                      text={m.text}
+                      textColor={m.textColor}
                     />
                   )}
                 </group>
@@ -1063,7 +1190,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
                 {m.points.map((point, i) => (
                   <mesh key={`dp-${m.id}-${i}`} position={[point[0], 0.05, point[2]]}>
                     <sphereGeometry args={[0.3, 16, 16]} />
-                    <meshBasicMaterial color={color} />
+                    <meshBasicMaterial color={m.color || color} />
                   </mesh>
                 ))}
                 {m.points.length === 2 && (
@@ -1073,7 +1200,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
                         [m.points[0][0], 0.05, m.points[0][2]],
                         [m.points[1][0], 0.05, m.points[1][2]]
                       ]}
-                      color={color}
+                      color={m.color || color}
                       lineWidth={9}
                       transparent
                       opacity={isActive ? 1 : 0.6}
@@ -1084,7 +1211,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
                         0.55,
                         (m.points[0][2] + m.points[1][2]) / 2
                       ]}
-                      color="#ef4444"
+                      color={m.textColor || m.color || "#ef4444"}
                       fontSize={1.5}
                       anchorX="center"
                       anchorY="middle"
@@ -1092,10 +1219,10 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
                       outlineWidth={0.1}
                       outlineColor="#000000"
                     >
-                      {Math.sqrt(
+                      {m.text || `${Math.sqrt(
                         Math.pow(m.points[0][0] - m.points[1][0], 2) + 
                         Math.pow(m.points[0][2] - m.points[1][2], 2)
-                      ).toFixed(1)}m
+                      ).toFixed(1)}m`}
                     </Text>
                   </group>
                 )}
@@ -1103,7 +1230,7 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
             );
           })}
 
-          <ContactShadows position={[0, 0.05, 0]} opacity={0.6} scale={120} blur={2} far={10} resolution={512} color="#000" />
+          <ContactShadows frames={Infinity} position={[0, 0.05, 0]} opacity={0.6} scale={120} blur={2} far={10} resolution={512} color="#000" />
           
           <EffectComposer>
             {ppSettings.bloom && (
@@ -1353,6 +1480,32 @@ export const ThreeDViewport: React.FC<ThreeDViewportProps> = ({
           </div>
         )}
       </div>
+
+      {isCameraViewActive && cameraSettings && cameraSettings.aspectRatio !== 'free' && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center z-40">
+          <div 
+            className="bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] border border-white/50 relative flex items-center justify-center"
+            style={{
+              aspectRatio: cameraSettings.aspectRatio === '16:9' ? '16/9' : cameraSettings.aspectRatio === '9:16' ? '9/16' : '1/1',
+              width: cameraSettings.aspectRatio === '16:9' ? '100%' : 'auto',
+              height: (cameraSettings.aspectRatio === '9:16' || cameraSettings.aspectRatio === '1:1') ? '100%' : 'auto',
+              maxWidth: '100%',
+              maxHeight: '100%'
+            }}
+          >
+            <div className="absolute inset-0 border border-white/10 m-8 flex items-center justify-center">
+              <div className="w-4 h-4 border-t border-l border-white/50 absolute top-0 left-0" />
+              <div className="w-4 h-4 border-t border-r border-white/50 absolute top-0 right-0" />
+              <div className="w-4 h-4 border-b border-l border-white/50 absolute bottom-0 left-0" />
+              <div className="w-4 h-4 border-b border-r border-white/50 absolute bottom-0 right-0" />
+            </div>
+            <div className="absolute top-4 left-4 px-2 py-1 bg-[#FC3434] rounded text-[10px] font-bold text-white uppercase tracking-widest flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              REC
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-};
+});

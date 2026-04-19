@@ -40,14 +40,32 @@ export interface DistanceMeasurement {
   id: string;
   type?: 'distance' | 'arrow';
   points: [number, number, number][];
+  color?: string;
+  text?: string;
+  textColor?: string;
 }
 
 export interface BillboardData {
   id: string;
   url: string;
   position: [number, number, number];
+  rotation?: [number, number, number];
   width: number;
   height: number;
+}
+
+export interface CameraKeyframe {
+  id: string;
+  time: number; // 0 to 1, representing position on timeline
+  position: [number, number, number];
+  target: [number, number, number];
+  fov: number;
+}
+
+export interface CameraSettings {
+  aspectRatio: '16:9' | '1:1' | '9:16' | 'free';
+  heightOffset: number;
+  fov: number;
 }
 
 export interface AppState {

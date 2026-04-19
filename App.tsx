@@ -44,6 +44,81 @@ const App: React.FC = () => {
   const [overlayEnabled, setOverlayEnabled] = useState(false);
   const [overlayOpacity, setOverlayOpacity] = useState(0.5);
 
+  const [cameraSettings, setCameraSettings] = useState<import('./types').CameraSettings>({
+    aspectRatio: 'free',
+    heightOffset: 0,
+    fov: 35
+  });
+  const [isCameraViewActive, setIsCameraViewActive] = useState(false);
+  const [isCameraSettingsModalOpen, setIsCameraSettingsModalOpen] = useState(false);
+  
+  const [keyframes, setKeyframes] = useState<import('./types').CameraKeyframe[]>([]);
+  const [isPlayingCamera, setIsPlayingCamera] = useState(false);
+
+  const viewportRef = useRef<import('./components/ThreeDViewport').ThreeDViewportRef>(null);
+
+  const [timelineDuration, setTimelineDuration] = useState(10);
+  const [durationStr, setDurationStr] = useState("00:10");
+  const [timelineTime, setTimelineTime] = useState(0);
+  const [selectedKeyframeId, setSelectedKeyframeId] = useState<string | null>(null);
+
+  // Time format helper
+  const formatTime = useCallback((secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }, []);
+
+  const applyDuration = useCallback((val: string) => {
+    const parts = val.split(":");
+    let secs = 10;
+    if (parts.length === 2) {
+      secs = (parseInt(parts[0]) || 0) * 60 + (parseInt(parts[1]) || 0);
+    } else {
+      secs = parseInt(val);
+    }
+    if (!isNaN(secs) && secs > 0) {
+      secs = Math.min(3600, Math.max(1, secs));
+      setTimelineDuration(secs);
+      setDurationStr(formatTime(secs));
+    } else {
+      setDurationStr(formatTime(timelineDuration));
+    }
+  }, [timelineDuration, formatTime]);
+
+  useEffect(() => {
+    let animationFrameId: number;
+    let lastTime = performance.now();
+    if (isPlayingCamera) {
+      const animate = (time: number) => {
+        const delta = (time - lastTime) / 1000;
+        lastTime = time;
+        setTimelineTime(prev => {
+          let next = prev + delta;
+          if (next >= timelineDuration) {
+            next = 0;
+            setIsPlayingCamera(false);
+          }
+          return next;
+        });
+        animationFrameId = requestAnimationFrame(animate);
+      };
+      animationFrameId = requestAnimationFrame(animate);
+    }
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [isPlayingCamera, timelineDuration]);
+
+  const togglePlay = () => {
+    if (!isPlayingCamera) {
+      if (timelineTime >= timelineDuration) {
+        setTimelineTime(0);
+      }
+      setIsPlayingCamera(true);
+    } else {
+      setIsPlayingCamera(false);
+    }
+  };
+
   const [state, setState] = useState<AppState & { activeNodeId: string | null; scanProgress: number }>({
     image: null,
     detectedPeople: [],
@@ -368,6 +443,130 @@ const App: React.FC = () => {
     }
   };
 
+  const handleExportImage = async () => {
+    const canvas = viewportRef.current?.getCanvas();
+    if (!canvas) return;
+
+    // To ensure the capture gets the latest frame, we might need a small delay, but since it's button click, it's fine.
+    let targetWidth = canvas.width;
+    let targetHeight = canvas.height;
+    
+    if (cameraSettings.aspectRatio !== 'free') {
+      const ratio = cameraSettings.aspectRatio === '16:9' ? 16/9 : cameraSettings.aspectRatio === '9:16' ? 9/16 : 1;
+      if (canvas.width / canvas.height > ratio) {
+         targetWidth = canvas.height * ratio;
+         targetHeight = canvas.height;
+      } else {
+         targetWidth = canvas.width;
+         targetHeight = canvas.width / ratio;
+      }
+    }
+
+    const targetCanvas = document.createElement('canvas');
+    targetCanvas.width = targetWidth;
+    targetCanvas.height = targetHeight;
+    const ctx = targetCanvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.drawImage(
+      canvas, 
+      (canvas.width - targetWidth) / 2, 
+      (canvas.height - targetHeight) / 2, 
+      targetWidth, 
+      targetHeight, 
+      0, 
+      0, 
+      targetWidth, 
+      targetHeight
+    );
+
+    const a = document.createElement('a');
+    a.href = targetCanvas.toDataURL('image/png');
+    a.download = `tactical-analysis-${Date.now()}.png`;
+    a.click();
+  };
+
+  const handleExportVideo = async () => {
+    const canvas = viewportRef.current?.getCanvas();
+    if (!canvas || keyframes.length < 2) {
+      alert("Please create at least 2 camera keyframes to export a video.");
+      return;
+    }
+
+    let targetWidth = canvas.width;
+    let targetHeight = canvas.height;
+    
+    if (cameraSettings.aspectRatio !== 'free') {
+      const ratio = cameraSettings.aspectRatio === '16:9' ? 16/9 : cameraSettings.aspectRatio === '9:16' ? 9/16 : 1;
+      if (canvas.width / canvas.height > ratio) {
+         targetWidth = canvas.height * ratio;
+         targetHeight = canvas.height;
+      } else {
+         targetWidth = canvas.width;
+         targetHeight = canvas.width / ratio;
+      }
+    }
+
+    const targetCanvas = document.createElement('canvas');
+    targetCanvas.width = targetWidth;
+    targetCanvas.height = targetHeight;
+    const ctx = targetCanvas.getContext('2d');
+    if (!ctx) return;
+
+    let isRecording = true;
+    const drawFrame = () => {
+       if(!isRecording) return;
+       ctx.drawImage(
+         canvas, 
+         (canvas.width - targetWidth) / 2, 
+         (canvas.height - targetHeight) / 2, 
+         targetWidth, 
+         targetHeight, 
+         0, 
+         0, 
+         targetWidth, 
+         targetHeight
+       );
+       requestAnimationFrame(drawFrame);
+    };
+    drawFrame();
+
+    const stream = targetCanvas.captureStream(30);
+    const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
+    const recorder = new MediaRecorder(stream, { mimeType });
+    const chunks: BlobPart[] = [];
+    
+    recorder.ondataavailable = e => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+    
+    recorder.onstop = () => {
+       const blob = new Blob(chunks, { type: mimeType });
+       const a = document.createElement('a');
+       a.href = URL.createObjectURL(blob);
+       a.download = `tactical-analysis-${Date.now()}.${mimeType === 'video/mp4' ? 'mp4' : 'webm'}`;
+       a.click();
+    };
+    
+    // Auto start the timeline playback
+    setTimelineTime(0);
+    setIsPlayingCamera(true);
+    recorder.start();
+
+    // The playback effect will animate `timelineTime` up to `timelineDuration` and then set `isPlayingCamera` to false.
+    // We can monitor `isPlayingCamera` via an interval or timeout.
+    const checkInterval = setInterval(() => {
+      // Actually we are inside a snapshot state here. 
+      // It's safer to just set a setTimeout for the duration of the timeline.
+    }, 100);
+    clearInterval(checkInterval); // We will just use setTimeout.
+
+    setTimeout(() => {
+      isRecording = false;
+      recorder.stop();
+    }, timelineDuration * 1000);
+  };
+
   const selectedPerson = state.detectedPeople.find(p => p.id === state.selectedId) || null;
   const allNodes = [...CALIBRATION_NODES, ...state.customNodes];
   const activeNode = allNodes.find(n => n.id === state.activeNodeId);
@@ -412,6 +611,7 @@ const App: React.FC = () => {
               transformMode={transformMode}
               setTransformMode={setTransformMode}
               measurements={measurements}
+              setMeasurements={setMeasurements}
               activeMeasurementId={activeMeasurementId}
               setActiveMeasurementId={setActiveMeasurementId}
               onClearMeasurement={(id) => {
@@ -430,6 +630,14 @@ const App: React.FC = () => {
               setBillboards={setBillboards}
               selectedBillboardId={selectedBillboardId}
               setSelectedBillboardId={setSelectedBillboardId}
+              isCameraViewActive={isCameraViewActive}
+              setIsCameraViewActive={setIsCameraViewActive}
+              isCameraSettingsOpen={isCameraSettingsModalOpen}
+              setIsCameraSettingsOpen={setIsCameraSettingsModalOpen}
+              cameraSettings={cameraSettings}
+              setCameraSettings={setCameraSettings}
+              onExportImage={handleExportImage}
+              onExportVideo={handleExportVideo}
             />
           ) : (
             <>
@@ -695,8 +903,142 @@ const App: React.FC = () => {
                   setBillboards={setBillboards}
                   selectedBillboardId={selectedBillboardId}
                   setSelectedBillboardId={setSelectedBillboardId}
+                  ref={viewportRef}
+                  cameraSettings={cameraSettings}
+                  isCameraViewActive={isCameraViewActive}
+                  keyframes={keyframes}
+                  isPlayingCamera={isPlayingCamera}
+                  timelineTime={timelineTime}
                 />
               </div>
+              {state.fullscreenView === '3d' && (
+                <div className="h-20 bg-white border border-[#eee] rounded-xl mt-4 shadow-sm flex flex-col justify-center px-4 gap-2 flex-shrink-0 relative">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                       <button 
+                         className={`p-2 rounded-lg transition-colors ${isPlayingCamera ? 'bg-[#FC3434]/20 text-[#FC3434]' : 'bg-[#f0f0f0] hover:bg-[#e0e0e0] text-[#666]'}`}
+                         onClick={togglePlay}
+                         title={isPlayingCamera ? "Pause" : "Play"}
+                       >
+                         {isPlayingCamera ? (
+                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+                         ) : (
+                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                         )}
+                       </button>
+                       <span className="text-xs font-mono font-bold text-black/60 hidden md:block select-none w-12">{formatTime(timelineTime)}</span>
+                    </div>
+
+                    <div 
+                      className="flex-1 relative h-8 group cursor-pointer flex items-center"
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        const rawProgress = Math.max(0, Math.min(1, x / rect.width));
+                        setTimelineTime(rawProgress * timelineDuration);
+                        setSelectedKeyframeId(null);
+                      }}
+                      onMouseMove={(e) => {
+                        if (e.buttons === 1) { // Left click dragging
+                           const rect = e.currentTarget.getBoundingClientRect();
+                           const x = e.clientX - rect.left;
+                           const rawProgress = Math.max(0, Math.min(1, x / rect.width));
+                           setTimelineTime(rawProgress * timelineDuration);
+                        }
+                      }}
+                    >
+                      <div className="absolute left-0 right-0 h-1.5 bg-[#eee] rounded-full pointer-events-none" />
+                      <div className="absolute left-0 h-1.5 bg-[#FC3434]/50 rounded-l-full pointer-events-none" style={{ width: `${(timelineTime / timelineDuration) * 100}%` }} />
+                      
+                      {/* Playhead handle */}
+                      <div 
+                        className="absolute w-1 h-6 bg-[#FC3434] top-1/2 -translate-y-1/2 -translate-x-1/2 shadow-sm rounded-full pointer-events-none z-10"
+                        style={{ left: `${(timelineTime / timelineDuration) * 100}%` }}
+                      >
+                         <div className="absolute -top-3 -left-2 w-5 h-3 bg-[#FC3434] rounded-sm flex items-center justify-center">
+                            <div className="w-0 h-0 border-l-[4px] border-r-[4px] border-t-[4px] border-l-transparent border-r-transparent border-t-[#FC3434] absolute -bottom-1" />
+                         </div>
+                      </div>
+
+                      {/* Keyframes */}
+                      {keyframes.map((kf) => (
+                        <div 
+                          key={kf.id}
+                          className={`absolute w-3.5 h-3.5 rounded-full top-1/2 -translate-y-1/2 transform -translate-x-1/2 cursor-pointer border-2 transition-transform ${selectedKeyframeId === kf.id ? 'bg-[#FC3434] border-white scale-125 z-20 shadow-md' : 'bg-black border-white hover:scale-125 z-0'}`}
+                          style={{ left: `${(kf.time / timelineDuration) * 100}%` }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedKeyframeId(kf.id);
+                            setTimelineTime(kf.time);
+                          }}
+                          title={`Keyframe at ${formatTime(kf.time)}`}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1 border border-[#eee] bg-[#f8f8f8] px-2 py-1 rounded-lg" title="Timeline duration (mm:ss)">
+                        <label className="text-[10px] uppercase font-bold text-[#999]">DUR</label>
+                        <input 
+                          type="text" 
+                          value={durationStr}
+                          onChange={(e) => setDurationStr(e.target.value)}
+                          onBlur={() => applyDuration(durationStr)}
+                          onKeyDown={(e) => e.key === 'Enter' && applyDuration(durationStr)}
+                          className="w-10 text-xs font-mono font-bold bg-transparent text-center focus:outline-none text-[#333]"
+                        />
+                      </div>
+
+                      <div className="w-[1px] h-6 bg-[#eee]" />
+
+                      {/* Add/Update Keyframe */}
+                      <button 
+                        className="p-1.5 rounded-lg bg-black text-white hover:bg-black/80 transition-colors"
+                        onClick={() => {
+                          if (viewportRef.current) {
+                            const camState = viewportRef.current.getCameraState();
+                            const existingIdx = keyframes.findIndex(k => Math.abs(k.time - timelineTime) < 0.05);
+                            if (existingIdx >= 0) {
+                               const newKf = [...keyframes];
+                               newKf[existingIdx] = { ...newKf[existingIdx], position: camState.position, target: camState.target, fov: camState.fov };
+                               setKeyframes(newKf);
+                               setSelectedKeyframeId(newKf[existingIdx].id);
+                            } else {
+                               const newKeyframe = {
+                                 id: Math.random().toString(36).substring(7),
+                                 time: timelineTime,
+                                 position: camState.position,
+                                 target: camState.target,
+                                 fov: camState.fov
+                               };
+                               setKeyframes([...keyframes, newKeyframe]);
+                               setSelectedKeyframeId(newKeyframe.id);
+                            }
+                          }
+                        }}
+                        title="Add/Update Keyframe at Playhead"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                      </button>
+
+                      {/* Delete Selected Keyframe */}
+                      <button 
+                        className={`p-1.5 rounded-lg border transition-colors ${selectedKeyframeId ? 'border-[#FC3434] text-[#FC3434] hover:bg-[#FC3434]/10 bg-white' : 'border-[#eee] text-[#ccc] cursor-not-allowed bg-[#f8f8f8]'}`}
+                        disabled={!selectedKeyframeId}
+                        onClick={() => {
+                          if (selectedKeyframeId) {
+                            setKeyframes(keyframes.filter(k => k.id !== selectedKeyframeId));
+                            setSelectedKeyframeId(null);
+                          }
+                        }}
+                        title="Delete Selected Keyframe"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -13,12 +13,12 @@ import { useLoader, useThree, useFrame } from '@react-three/fiber';
 
 declare const cv: any;
 
-const CaptureManager = ({ onGrab }: { onGrab: (gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) => void }) => {
-  const { gl, scene, camera } = useThree();
+const CaptureManager = ({ onGrab }: { onGrab: (state: any) => void }) => {
+  const state = useThree();
   
   useEffect(() => {
-    onGrab(gl, scene, camera);
-  }, [gl, scene, camera, onGrab]);
+    onGrab(state);
+  }, [state, onGrab]);
 
   return null;
 };
@@ -914,7 +914,8 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
   const containerRef = React.useRef<HTMLDivElement>(null);
   const cameraRef = React.useRef<THREE.PerspectiveCamera>(null);
   const controlsRef = React.useRef<any>(null);
-  const threeContext = React.useRef<{ gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera } | null>(null);
+  const composerRef = React.useRef<any>(null);
+  const threeContext = React.useRef<any>(null);
   const [dpr, setDpr] = useState<[number, number]>([1, 2]);
 
   React.useImperativeHandle(ref, () => ({
@@ -950,7 +951,12 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
         cam.updateProjectionMatrix();
       }
       
-      gl.render(scene, camera);
+      if (composerRef.current) {
+        composerRef.current.setSize(width, height);
+        composerRef.current.render();
+      } else {
+        gl.render(scene, camera);
+      }
       
       const targetCanvas = document.createElement('canvas');
       targetCanvas.width = width;
@@ -967,7 +973,13 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
          cam.aspect = originalSize.x / originalSize.y;
          cam.updateProjectionMatrix();
       }
-      gl.render(scene, camera);
+
+      if (composerRef.current) {
+        composerRef.current.setSize(originalSize.x, originalSize.y);
+        composerRef.current.render();
+      } else {
+        gl.render(scene, camera);
+      }
       
       return targetCanvas;
     },
@@ -1093,7 +1105,12 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
               }
           }
 
-          gl.render(scene, camera);
+          if (composerRef.current) {
+              composerRef.current.setSize(width, height);
+              composerRef.current.render();
+          } else {
+              gl.render(scene, camera);
+          }
           
           const targetCanvas = document.createElement('canvas');
           targetCanvas.width = width;
@@ -1124,7 +1141,13 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
          cam.aspect = originalSize.x / originalSize.y;
          cam.updateProjectionMatrix();
       }
-      gl.render(scene, camera);
+
+      if (composerRef.current) {
+          composerRef.current.setSize(originalSize.x, originalSize.y);
+          composerRef.current.render();
+      } else {
+          gl.render(scene, camera);
+      }
 
       return new Blob([muxer.target.buffer], { type: 'video/mp4' });
     }
@@ -1309,8 +1332,8 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
   return (
     <div ref={containerRef} className="w-full h-full bg-[#D7D7D7] relative overflow-hidden rounded-lg">
       <Loader />
-      <Canvas shadows dpr={dpr} gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: ppSettings.exposure }}>
-        <CaptureManager onGrab={(gl, scene, camera) => { threeContext.current = { gl, scene, camera }; }} />
+      <Canvas shadows dpr={dpr} gl={{ preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: ppSettings.exposure }}>
+        <CaptureManager onGrab={(state) => { threeContext.current = state; }} />
         <color attach="background" args={['#D7D7D7']} />
         <PerspectiveCamera 
           ref={cameraRef}
@@ -1472,7 +1495,7 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
             );
           })}
           
-          <EffectComposer>
+          <EffectComposer ref={composerRef}>
             {ppSettings.ao && (
                <N8AO 
                  aoRadius={1.5}

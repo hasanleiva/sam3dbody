@@ -443,128 +443,90 @@ const App: React.FC = () => {
     }
   };
 
-  const handleExportImage = async () => {
-    const canvas = viewportRef.current?.getCanvas();
-    if (!canvas) return;
-
-    // To ensure the capture gets the latest frame, we might need a small delay, but since it's button click, it's fine.
-    let targetWidth = canvas.width;
-    let targetHeight = canvas.height;
+  const handleExportImage = async (quality?: 'FHD' | '4K') => {
+    let targetWidth = 1920;
+    let targetHeight = 1080;
     
-    if (cameraSettings.aspectRatio !== 'free') {
-      const ratio = cameraSettings.aspectRatio === '16:9' ? 16/9 : cameraSettings.aspectRatio === '9:16' ? 9/16 : 1;
-      if (canvas.width / canvas.height > ratio) {
-         targetWidth = canvas.height * ratio;
-         targetHeight = canvas.height;
-      } else {
-         targetWidth = canvas.width;
-         targetHeight = canvas.width / ratio;
+    const canvas = viewportRef.current?.getCanvas();
+    if (canvas && cameraSettings.aspectRatio === 'free') {
+      targetWidth = canvas.width;
+      targetHeight = canvas.height;
+    } else {
+      if (quality === '4K') {
+         if (cameraSettings.aspectRatio === '16:9') { targetWidth = 3840; targetHeight = 2160; }
+         else if (cameraSettings.aspectRatio === '9:16') { targetWidth = 2160; targetHeight = 3840; }
+         else if (cameraSettings.aspectRatio === '1:1') { targetWidth = 3840; targetHeight = 3840; }
+      } else if (quality === 'FHD') {
+         if (cameraSettings.aspectRatio === '16:9') { targetWidth = 1920; targetHeight = 1080; }
+         else if (cameraSettings.aspectRatio === '9:16') { targetWidth = 1080; targetHeight = 1920; }
+         else if (cameraSettings.aspectRatio === '1:1') { targetWidth = 1920; targetHeight = 1920; }
       }
     }
 
-    const targetCanvas = document.createElement('canvas');
-    targetCanvas.width = targetWidth;
-    targetCanvas.height = targetHeight;
-    const ctx = targetCanvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.drawImage(
-      canvas, 
-      (canvas.width - targetWidth) / 2, 
-      (canvas.height - targetHeight) / 2, 
-      targetWidth, 
-      targetHeight, 
-      0, 
-      0, 
-      targetWidth, 
-      targetHeight
-    );
+    const highResCanvas = viewportRef.current?.captureHighResFrame(targetWidth, targetHeight);
+    if (!highResCanvas) return;
 
     const a = document.createElement('a');
-    a.href = targetCanvas.toDataURL('image/png');
+    a.href = highResCanvas.toDataURL('image/png', 1.0);
     a.download = `tactical-analysis-${Date.now()}.png`;
     a.click();
   };
 
-  const handleExportVideo = async () => {
+  const handleExportVideo = async (quality?: 'FHD' | '4K') => {
     const canvas = viewportRef.current?.getCanvas();
     if (!canvas || keyframes.length < 2) {
       alert("Please create at least 2 camera keyframes to export a video.");
       return;
     }
-
-    let targetWidth = canvas.width;
-    let targetHeight = canvas.height;
     
-    if (cameraSettings.aspectRatio !== 'free') {
-      const ratio = cameraSettings.aspectRatio === '16:9' ? 16/9 : cameraSettings.aspectRatio === '9:16' ? 9/16 : 1;
-      if (canvas.width / canvas.height > ratio) {
-         targetWidth = canvas.height * ratio;
-         targetHeight = canvas.height;
-      } else {
-         targetWidth = canvas.width;
-         targetHeight = canvas.width / ratio;
+    if (!viewportRef.current?.encodeOfflineVideo) {
+      alert("Offline rendering is not supported on your browser or currently compiling.");
+      return;
+    }
+
+    let targetWidth = 1920;
+    let targetHeight = 1080;
+    
+    if (cameraSettings.aspectRatio === 'free') {
+      targetWidth = canvas.width;
+      targetHeight = canvas.height;
+    } else {
+      if (quality === '4K') {
+         if (cameraSettings.aspectRatio === '16:9') { targetWidth = 3840; targetHeight = 2160; }
+         else if (cameraSettings.aspectRatio === '9:16') { targetWidth = 2160; targetHeight = 3840; }
+         else if (cameraSettings.aspectRatio === '1:1') { targetWidth = 3840; targetHeight = 3840; }
+      } else if (quality === 'FHD') {
+         if (cameraSettings.aspectRatio === '16:9') { targetWidth = 1920; targetHeight = 1080; }
+         else if (cameraSettings.aspectRatio === '9:16') { targetWidth = 1080; targetHeight = 1920; }
+         else if (cameraSettings.aspectRatio === '1:1') { targetWidth = 1920; targetHeight = 1920; }
       }
     }
 
-    const targetCanvas = document.createElement('canvas');
-    targetCanvas.width = targetWidth;
-    targetCanvas.height = targetHeight;
-    const ctx = targetCanvas.getContext('2d');
-    if (!ctx) return;
-
-    let isRecording = true;
-    const drawFrame = () => {
-       if(!isRecording) return;
-       ctx.drawImage(
-         canvas, 
-         (canvas.width - targetWidth) / 2, 
-         (canvas.height - targetHeight) / 2, 
-         targetWidth, 
-         targetHeight, 
-         0, 
-         0, 
-         targetWidth, 
-         targetHeight
-       );
-       requestAnimationFrame(drawFrame);
-    };
-    drawFrame();
-
-    const stream = targetCanvas.captureStream(30);
-    const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
-    const recorder = new MediaRecorder(stream, { mimeType });
-    const chunks: BlobPart[] = [];
-    
-    recorder.ondataavailable = e => {
-      if (e.data.size > 0) chunks.push(e.data);
-    };
-    
-    recorder.onstop = () => {
-       const blob = new Blob(chunks, { type: mimeType });
-       const a = document.createElement('a');
-       a.href = URL.createObjectURL(blob);
-       a.download = `tactical-analysis-${Date.now()}.${mimeType === 'video/mp4' ? 'mp4' : 'webm'}`;
-       a.click();
-    };
-    
-    // Auto start the timeline playback
-    setTimelineTime(0);
-    setIsPlayingCamera(true);
-    recorder.start();
-
-    // The playback effect will animate `timelineTime` up to `timelineDuration` and then set `isPlayingCamera` to false.
-    // We can monitor `isPlayingCamera` via an interval or timeout.
-    const checkInterval = setInterval(() => {
-      // Actually we are inside a snapshot state here. 
-      // It's safer to just set a setTimeout for the duration of the timeline.
-    }, 100);
-    clearInterval(checkInterval); // We will just use setTimeout.
-
-    setTimeout(() => {
-      isRecording = false;
-      recorder.stop();
-    }, timelineDuration * 1000);
+    try {
+      // In a real application, you'd show a loading overlay here using `onProgress`
+      console.log(`Starting High Quality 60FPS Offline Render at ${targetWidth}x${targetHeight}...`);
+      
+      const blob = await viewportRef.current.encodeOfflineVideo(
+        targetWidth,
+        targetHeight,
+        60, // Enforce 60 FPS natively
+        timelineDuration,
+        keyframes,
+        (progress) => {
+          // Could dispatch to a state to show progress!
+          console.log(`Exporting video: ${Math.round(progress * 100)}%`);
+        }
+      );
+      
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `tactical-analysis-HQ-${Date.now()}.mp4`;
+      a.click();
+      console.log("Export complete!");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to export video. Please check the console for details.");
+    }
   };
 
   const selectedPerson = state.detectedPeople.find(p => p.id === state.selectedId) || null;

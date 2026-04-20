@@ -27,8 +27,8 @@ interface AnalysisToolsProps {
   setIsCameraSettingsOpen: (val: boolean) => void;
   cameraSettings: import('../types').CameraSettings;
   setCameraSettings: React.Dispatch<React.SetStateAction<import('../types').CameraSettings>>;
-  onExportImage: () => void;
-  onExportVideo: () => void;
+  onExportImage: (quality?: 'FHD' | '4K') => void;
+  onExportVideo: (quality?: 'FHD' | '4K') => void;
 }
 
 export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
@@ -62,6 +62,7 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
 }) => {
   const [xgValue, setXgValue] = useState<number | null>(null);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [exportQuality, setExportQuality] = useState<'FHD' | '4K'>('FHD');
 
   useEffect(() => {
     if (activeTool === 'xg' && selectedPerson && selectedPerson.worldPos) {
@@ -159,27 +160,48 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
         </div>
 
         {isExportMenuOpen && (
-          <div className="mb-4 p-4 bg-white border border-[#eee] shadow-sm rounded-xl text-black flex gap-2">
-            <button
-              onClick={() => {
-                setIsExportMenuOpen(false);
-                onExportImage();
-              }}
-              className="flex-1 py-2 px-3 bg-[#f5f5f5] hover:bg-[#eaeaea] text-black text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-              IMAGE
-            </button>
-            <button
-              onClick={() => {
-                setIsExportMenuOpen(false);
-                onExportVideo();
-              }}
-              className="flex-1 py-2 px-3 bg-[#FC3434] hover:bg-[#e02b2b] text-white text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-              VIDEO (.MP4)
-            </button>
+          <div className="mb-4 p-4 bg-white border border-[#eee] shadow-sm rounded-xl text-black flex flex-col gap-3">
+            {cameraSettings.aspectRatio !== 'free' && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest">Quality</label>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setExportQuality('FHD')}
+                    className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg border transition-colors ${exportQuality === 'FHD' ? 'bg-black text-white border-black' : 'bg-white border-[#eee] text-black/60 hover:bg-[#f0f0f0]'}`}
+                  >
+                    FHD {cameraSettings.aspectRatio === '16:9' ? '(1920x1080)' : cameraSettings.aspectRatio === '9:16' ? '(1080x1920)' : '(1920x1920)'}
+                  </button>
+                  <button 
+                    onClick={() => setExportQuality('4K')}
+                    className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg border transition-colors ${exportQuality === '4K' ? 'bg-black text-white border-black' : 'bg-white border-[#eee] text-black/60 hover:bg-[#f0f0f0]'}`}
+                  >
+                    4K {cameraSettings.aspectRatio === '16:9' ? '(3840x2160)' : cameraSettings.aspectRatio === '9:16' ? '(2160x3840)' : '(3840x3840)'}
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setIsExportMenuOpen(false);
+                  onExportImage(cameraSettings.aspectRatio === 'free' ? undefined : exportQuality);
+                }}
+                className="flex-1 py-2 px-3 bg-[#f5f5f5] hover:bg-[#eaeaea] text-black text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                IMAGE
+              </button>
+              <button
+                onClick={() => {
+                  setIsExportMenuOpen(false);
+                  onExportVideo(cameraSettings.aspectRatio === 'free' ? undefined : exportQuality);
+                }}
+                className="flex-1 py-2 px-3 bg-[#FC3434] hover:bg-[#e02b2b] text-white text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                VIDEO (.MP4)
+              </button>
+            </div>
           </div>
         )}
 

@@ -220,10 +220,11 @@ app.get("/api/textures", (req: any, res: any) => {
   }
 
   try {
+    const r2Base = process.env.VITE_R2_STORAGE_URL || process.env.R2_PUBLIC_URL || "";
     const files = fs.readdirSync(dir);
     const textures = files
       .filter((f) => /\.(png|jpe?g|svg|webp)$/i.test(f))
-      .map((f) => ({ name: f, path: `/textures/${f}` }));
+      .map((f) => ({ name: f, path: r2Base ? `${r2Base}/textures/${f}` : `/textures/${f}` }));
     res.json({ textures });
   } catch (e) {
     res.json({ textures: [] });
@@ -241,10 +242,11 @@ app.get("/api/hdr", (req: any, res: any) => {
   }
 
   try {
+    const r2Base = process.env.VITE_R2_STORAGE_URL || process.env.R2_PUBLIC_URL || "";
     const files = fs.readdirSync(dir);
     const hdrs = files
       .filter((f) => /\.(hdr)$/i.test(f))
-      .map((f) => ({ name: f, path: `/hdr/${f}` }));
+      .map((f) => ({ name: f, path: r2Base ? `${r2Base}/hdr/${f}` : `/hdr/${f}` }));
     res.json({ hdrs });
   } catch (e) {
     res.json({ hdrs: [] });

@@ -13,6 +13,16 @@ import { useLoader, useThree, useFrame } from '@react-three/fiber';
 
 declare const cv: any;
 
+const CaptureManager = ({ onGrab }: { onGrab: (gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) => void }) => {
+  const { gl, scene, camera } = useThree();
+  
+  useEffect(() => {
+    onGrab(gl, scene, camera);
+  }, [gl, scene, camera, onGrab]);
+
+  return null;
+};
+
 const CameraAnimator = ({ cameraRef, controlsRef, keyframes, isPlayingCamera, timelineTime, isCameraViewActive, cameraSettings }: any) => {
   const lastTimeRef = useRef(timelineTime);
 
@@ -88,10 +98,12 @@ import vertexMapping from '../vertex_mapping.json';
 
 import { extractRigPose } from '../utils/poseExtractor';
 
+const R2_BASE = import.meta.env.VITE_R2_STORAGE_URL || '';
+
 const PersonMesh = ({ url, color, colors, textureUrl }: { url: string, color: string, colors?: { jersey: string, shorts: string, socks: string, body: string }, textureUrl?: string }) => {
   const plyGeometry = useLoader(PLYLoader, url);
-  const fbxRigGroup = useLoader(FBXLoader, '/models/mesh_rig.fbx');
-  const fbxClothGroup = useLoader(FBXLoader, '/models/mesh_rig_cloth.fbx');
+  const fbxRigGroup = useLoader(FBXLoader, R2_BASE ? `${R2_BASE}/models/mesh_rig.fbx` : '/models/mesh_rig.fbx');
+  const fbxClothGroup = useLoader(FBXLoader, R2_BASE ? `${R2_BASE}/models/mesh_rig_cloth.fbx` : '/models/mesh_rig_cloth.fbx');
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
 
   useEffect(() => {
@@ -315,6 +327,10 @@ interface ThreeDViewportProps {
 export interface ThreeDViewportRef {
   getCameraState: () => { position: [number, number, number], target: [number, number, number], fov: number };
   getCanvas: () => HTMLCanvasElement | null;
+  captureHighResFrame: (width: number, height: number) => HTMLCanvasElement | null;
+  startRecording: (width: number, height: number) => void;
+  stopRecording: () => void;
+  encodeOfflineVideo?: (width: number, height: number, fps: number, duration: number, keyframes: CameraKeyframe[], onProgress: (p: number) => void) => Promise<Blob>;
 }
 
 const PersonGroup = ({ 
@@ -898,6 +914,8 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
   const containerRef = React.useRef<HTMLDivElement>(null);
   const cameraRef = React.useRef<THREE.PerspectiveCamera>(null);
   const controlsRef = React.useRef<any>(null);
+  const threeContext = React.useRef<{ gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera } | null>(null);
+  const [dpr, setDpr] = useState<[number, number]>([1, 2]);
 
   React.useImperativeHandle(ref, () => ({
     getCameraState: () => {
@@ -913,6 +931,202 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
     getCanvas: () => {
       if (!containerRef.current) return null;
       return containerRef.current.querySelector('canvas');
+    },
+    captureHighResFrame: (width: number, height: number) => {
+      if (!threeContext.current) return null;
+      
+      const { gl, scene, camera } = threeContext.current;
+      
+      const originalSize = new THREE.Vector2();
+      gl.getSize(originalSize);
+      const originalPixelRatio = gl.getPixelRatio();
+      
+      gl.setPixelRatio(1.0); 
+      gl.setSize(width, height, false); 
+      
+      if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+        const cam = camera as THREE.PerspectiveCamera;
+        cam.aspect = width / height;
+        cam.updateProjectionMatrix();
+      }
+      
+      gl.render(scene, camera);
+      
+      const targetCanvas = document.createElement('canvas');
+      targetCanvas.width = width;
+      targetCanvas.height = height;
+      const ctx = targetCanvas.getContext('2d');
+      if (ctx) {
+         ctx.drawImage(gl.domElement, 0, 0, width, height);
+      }
+      
+      gl.setPixelRatio(originalPixelRatio);
+      gl.setSize(originalSize.x, originalSize.y, false);
+      if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+         const cam = camera as THREE.PerspectiveCamera;
+         cam.aspect = originalSize.x / originalSize.y;
+         cam.updateProjectionMatrix();
+      }
+      gl.render(scene, camera);
+      
+      return targetCanvas;
+    },
+    startRecording: (width: number, height: number) => {
+      setDpr([1, 1]); // Force to 1 so the pixel ratio is strictly 1:1 for 4K
+      
+      if (!containerRef.current) return;
+      const el = containerRef.current;
+      
+      const rect = el.getBoundingClientRect();
+      (containerRef.current as any)._originalStyle = el.getAttribute('style') || '';
+      
+      el.style.width = `${width}px`;
+      el.style.height = `${height}px`;
+      
+      const scaleX = rect.width / width;
+      const scaleY = rect.height / height;
+      const scale = Math.min(scaleX, scaleY);
+      
+      el.style.transform = `scale(${scale})`;
+      el.style.transformOrigin = 'top left';
+      el.style.position = 'absolute';
+      el.style.top = '0';
+      el.style.left = '0';
+      el.style.zIndex = '50';
+      // R3F will automatically catch this dimension change and adjust its internal canvas size to match it!
+    },
+    stopRecording: () => {
+      setDpr([1, 2]); 
+      
+      if (!containerRef.current) return;
+      const el = containerRef.current;
+      
+      if (typeof (el as any)._originalStyle === 'string') {
+        el.setAttribute('style', (el as any)._originalStyle);
+      }
+      
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
+    },
+    encodeOfflineVideo: async (width: number, height: number, fps: number, duration: number, kfs: CameraKeyframe[], onProgress: (p: number) => void) => {
+      if (!threeContext.current) throw new Error("No WebGL Context");
+      const { gl, scene, camera } = threeContext.current;
+
+      const MuxerMod = await import('mp4-muxer');
+      
+      let muxer = new MuxerMod.Muxer({
+          target: new MuxerMod.ArrayBufferTarget(),
+          video: {
+              codec: 'avc',
+              width,
+              height
+          },
+          fastStart: 'in-memory'
+      });
+
+      let videoEncoder = new window.VideoEncoder({
+          output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+          error: e => console.error(e)
+      });
+
+      videoEncoder.configure({
+          codec: 'avc1.64003E',
+          width,
+          height,
+          bitrate: width >= 3000 ? 100_000_000 : 40_000_000,
+          framerate: fps,
+      });
+
+      const originalSize = new THREE.Vector2();
+      gl.getSize(originalSize);
+      const originalPixelRatio = gl.getPixelRatio();
+      
+      gl.setPixelRatio(1.0); 
+      gl.setSize(width, height, false); 
+      
+      if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+          const cam = camera as THREE.PerspectiveCamera;
+          cam.aspect = width / height;
+          cam.updateProjectionMatrix();
+      }
+
+      const totalFrames = Math.ceil(duration * fps);
+      for(let f = 0; f < totalFrames; f++) {
+          const time = (f / fps);
+          
+          if (kfs && kfs.length > 0) {
+              const sorted = [...kfs].sort((a, b) => a.time - b.time);
+              let k1 = sorted[0];
+              let k2 = sorted[sorted.length - 1];
+              
+              if (time <= k1.time) k2 = k1;
+              else if (time >= k2.time) k1 = k2;
+              else {
+                  for (let i = 0; i < sorted.length - 1; i++) {
+                      if (time >= sorted[i].time && time <= sorted[i+1].time) {
+                          k1 = sorted[i]; k2 = sorted[i+1]; break;
+                      }
+                  }
+              }
+
+              if (k1 && k2) {
+                  const range = k2.time - k1.time;
+                  const progress = range > 0 ? (time - k1.time) / range : 0;
+                  
+                  camera.position.lerpVectors(
+                    new THREE.Vector3(...k1.position),
+                    new THREE.Vector3(...k2.position),
+                    progress
+                  );
+                  if (controlsRef.current) {
+                      controlsRef.current.target.lerpVectors(
+                          new THREE.Vector3(...k1.target),
+                          new THREE.Vector3(...k2.target),
+                          progress
+                      );
+                      controlsRef.current.update();
+                  }
+                  if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+                      const cam = camera as THREE.PerspectiveCamera;
+                      cam.fov = THREE.MathUtils.lerp(k1.fov, k2.fov, progress);
+                      cam.updateProjectionMatrix();
+                  }
+              }
+          }
+
+          gl.render(scene, camera);
+          
+          const targetCanvas = document.createElement('canvas');
+          targetCanvas.width = width;
+          targetCanvas.height = height;
+          const ctx = targetCanvas.getContext('2d');
+          if (ctx) {
+             ctx.drawImage(gl.domElement, 0, 0, width, height);
+          }
+
+          const frame = new window.VideoFrame(targetCanvas, { timestamp: time * 1_000_000 });
+          videoEncoder.encode(frame);
+          frame.close();
+
+          onProgress(f / totalFrames);
+          
+          if (f % 5 === 0) {
+              await new Promise(r => setTimeout(r, 1));
+          }
+      }
+
+      await videoEncoder.flush();
+      muxer.finalize();
+
+      gl.setPixelRatio(originalPixelRatio);
+      gl.setSize(originalSize.x, originalSize.y, false);
+      if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+         const cam = camera as THREE.PerspectiveCamera;
+         cam.aspect = originalSize.x / originalSize.y;
+         cam.updateProjectionMatrix();
+      }
+      gl.render(scene, camera);
+
+      return new Blob([muxer.target.buffer], { type: 'video/mp4' });
     }
   }));
 
@@ -1075,7 +1289,8 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
   return (
     <div ref={containerRef} className="w-full h-full bg-[#D7D7D7] relative overflow-hidden rounded-lg">
       <Loader />
-      <Canvas shadows dpr={[1, 2]} gl={{ preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: ppSettings.exposure }}>
+      <Canvas shadows dpr={dpr} gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: ppSettings.exposure }}>
+        <CaptureManager onGrab={(gl, scene, camera) => { threeContext.current = { gl, scene, camera }; }} />
         <color attach="background" args={['#D7D7D7']} />
         <PerspectiveCamera 
           ref={cameraRef}
@@ -1229,8 +1444,6 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
               </group>
             );
           })}
-
-          <ContactShadows frames={Infinity} position={[0, 0.05, 0]} opacity={0.6} scale={120} blur={2} far={10} resolution={512} color="#000" />
           
           <EffectComposer>
             {ppSettings.bloom && (

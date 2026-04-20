@@ -1156,11 +1156,25 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
 
   useEffect(() => {
     fetch('/api/hdr')
-      .then(res => res.json())
+      .then(res => {
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+           throw new TypeError("Received non-JSON response");
+        }
+        return res.json();
+      })
       .then(data => {
         if (data.hdrs) setAvailableHdrs(data.hdrs);
       })
-      .catch(err => console.error("Failed to load HDRs", err));
+      .catch(err => {
+         console.warn("Failed to fetch from API, using fallback HDRs", err);
+         const r2Base = import.meta.env.VITE_R2_STORAGE_URL || '';
+         const fallbacks = ['suburban_soccer_park_1k.hdr'].map(f => ({
+           name: f,
+           path: r2Base ? `${r2Base}/hdr/${f}` : `/hdr/${f}`
+         }));
+         setAvailableHdrs(fallbacks);
+      });
   }, []);
 
   const RendererSettings = () => {

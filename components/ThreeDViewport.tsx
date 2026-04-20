@@ -1,7 +1,7 @@
 import React, { Suspense, useMemo, useCallback, useRef, useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress, Line, Text, TransformControls, Html } from '@react-three/drei';
-import { EffectComposer, Bloom, ChromaticAberration, Noise, Vignette } from '@react-three/postprocessing';
+import { EffectComposer, Bloom, ChromaticAberration, Noise, Vignette, N8AO, DepthOfField } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 import { Settings2 } from 'lucide-react';
 import { HumanModel } from './HumanModel';
@@ -1145,7 +1145,13 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
       vignetteDarkness: 0.5,
       noise: true,
       noiseOpacity: 0.05,
-      exposure: 1.0
+      exposure: 1.0,
+      lightAzimuth: Math.PI / 4,
+      lightElevation: Math.PI / 4,
+      ao: true,
+      aoIntensity: 2.0,
+      dof: false,
+      dofFocusDistance: 0.1
     };
     try {
       const saved = localStorage.getItem('3d_pp_settings');
@@ -1331,11 +1337,18 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
         
         <ambientLight intensity={0.8 * ppSettings.exposure} />
         <directionalLight 
-          position={[50, 50, 50]} 
+          position={[
+            100 * Math.cos(ppSettings.lightElevation) * Math.sin(ppSettings.lightAzimuth), 
+            100 * Math.sin(ppSettings.lightElevation), 
+            100 * Math.cos(ppSettings.lightElevation) * Math.cos(ppSettings.lightAzimuth)
+          ]} 
           intensity={1.5 * ppSettings.exposure} 
           castShadow 
-          shadow-mapSize={[1024, 1024]}
-        />
+          shadow-mapSize={[2048, 2048]}
+          shadow-bias={-0.001}
+        >
+          <orthographicCamera attach="shadow-camera" args={[-80, 80, 80, -80, 0.1, 300]} />
+        </directionalLight>
         <pointLight position={[-30, 20, -30]} intensity={0.8 * ppSettings.exposure} />
 
         <Suspense fallback={null}>
@@ -1460,11 +1473,26 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
           })}
           
           <EffectComposer>
+            {ppSettings.ao && (
+               <N8AO 
+                 aoRadius={1.5}
+                 intensity={ppSettings.aoIntensity}
+                 distanceFalloff={0.2}
+               />
+            )}
             {ppSettings.bloom && (
               <Bloom 
                 intensity={ppSettings.bloomIntensity} 
                 luminanceThreshold={ppSettings.bloomLuminanceThreshold} 
                 mipmapBlur 
+              />
+            )}
+            {ppSettings.dof && (
+              <DepthOfField 
+                 focusDistance={ppSettings.dofFocusDistance} 
+                 focalLength={0.02} 
+                 bokehScale={2} 
+                 height={480} 
               />
             )}
             {ppSettings.chromaticAberration && (
@@ -1568,33 +1596,34 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
           <Settings2 className="w-4 h-4" />
           Post Processing
         </button>
+      </div>
 
-        {showPostProcessModal && (
-          <div className="absolute bottom-full left-0 mb-2 w-64 bg-white/95 backdrop-blur-md border border-black/10 shadow-xl rounded-xl p-3 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-black">Settings</h3>
-              <button 
-                onClick={() => setShowPostProcessModal(false)}
-                className="text-black/50 hover:text-black"
+      {showPostProcessModal && (
+        <div className="absolute bottom-[60px] left-4 z-30 w-64 max-h-[calc(100%-80px)] bg-white/95 backdrop-blur-md border border-black/10 shadow-xl rounded-xl p-3 flex flex-col gap-3">
+          <div className="flex items-center justify-between shrink-0">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-black">Settings</h3>
+            <button 
+              onClick={() => setShowPostProcessModal(false)}
+              className="text-black/50 hover:text-black"
+            >
+              X
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-2 overflow-y-auto pr-2 no-scrollbar">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-[#666] uppercase">HDR Map</label>
+              <select 
+                className="bg-black/5 p-1 rounded border border-transparent focus:border-[#FC3434] outline-none text-[10px]"
+                value={ppSettings.hdr}
+                onChange={(e) => setPpSettings(p => ({ ...p, hdr: e.target.value }))}
               >
-                X
-              </button>
+                <option value="">Default (City Preset)</option>
+                {availableHdrs.map(h => (
+                  <option key={h.path} value={h.path}>{h.name}</option>
+                ))}
+              </select>
             </div>
-
-            <div className="flex flex-col gap-2 max-h-[50vh] overflow-y-auto pr-2 no-scrollbar">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-[#666] uppercase">HDR Map</label>
-                <select 
-                  className="bg-black/5 p-1 rounded border border-transparent focus:border-[#FC3434] outline-none text-[10px]"
-                  value={ppSettings.hdr}
-                  onChange={(e) => setPpSettings(p => ({ ...p, hdr: e.target.value }))}
-                >
-                  <option value="">Default (City Preset)</option>
-                  {availableHdrs.map(h => (
-                    <option key={h.path} value={h.path}>{h.name}</option>
-                  ))}
-                </select>
-              </div>
 
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-bold text-[#666] uppercase">Exposure</label>
@@ -1605,7 +1634,65 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
                 />
               </div>
 
-              <label className="flex items-center gap-2 text-[10px] font-bold">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-[#666] uppercase">Sun Azimuth (Rotation)</label>
+                <input 
+                  type="range" min="0" max={Math.PI * 2} step="0.1" 
+                  value={ppSettings.lightAzimuth}
+                  onChange={(e) => setPpSettings(p => ({ ...p, lightAzimuth: parseFloat(e.target.value) }))}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-[#666] uppercase">Sun Elevation (Height)</label>
+                <input 
+                  type="range" min="0" max={Math.PI / 2} step="0.05" 
+                  value={ppSettings.lightElevation}
+                  onChange={(e) => setPpSettings(p => ({ ...p, lightElevation: parseFloat(e.target.value) }))}
+                />
+              </div>
+
+              <label className="flex items-center gap-2 text-[10px] font-bold mt-1">
+                <input 
+                  type="checkbox" 
+                  checked={ppSettings.ao}
+                  onChange={(e) => setPpSettings(p => ({ ...p, ao: e.target.checked }))}
+                />
+                AMBIENT OCCLUSION (SSAO)
+              </label>
+
+              {ppSettings.ao && (
+                <div className="flex flex-col gap-1 pl-6">
+                  <label className="text-[9px] font-bold text-[#666] uppercase">Intensity</label>
+                  <input 
+                    type="range" min="0" max="5" step="0.1" 
+                    value={ppSettings.aoIntensity}
+                    onChange={(e) => setPpSettings(p => ({ ...p, aoIntensity: parseFloat(e.target.value) }))}
+                  />
+                </div>
+              )}
+              
+              <label className="flex items-center gap-2 text-[10px] font-bold mt-1">
+                <input 
+                  type="checkbox" 
+                  checked={ppSettings.dof}
+                  onChange={(e) => setPpSettings(p => ({ ...p, dof: e.target.checked }))}
+                />
+                DEPTH OF FIELD
+              </label>
+
+              {ppSettings.dof && (
+                <div className="flex flex-col gap-1 pl-6">
+                  <label className="text-[9px] font-bold text-[#666] uppercase">Focus Distance</label>
+                  <input 
+                    type="range" min="0.0" max="1" step="0.01" 
+                    value={ppSettings.dofFocusDistance}
+                    onChange={(e) => setPpSettings(p => ({ ...p, dofFocusDistance: parseFloat(e.target.value) }))}
+                  />
+                </div>
+              )}
+
+              <label className="flex items-center gap-2 text-[10px] font-bold mt-1">
                 <input 
                   type="checkbox" 
                   checked={ppSettings.bloom}
@@ -1692,7 +1779,7 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
               )}
             </div>
 
-            <div className="pt-2 border-t border-[#eee]">
+            <div className="pt-2 border-t border-[#eee] shrink-0">
               <button
                 onClick={() => {
                   localStorage.setItem('3d_pp_settings', JSON.stringify(ppSettings));
@@ -1706,7 +1793,6 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
             </div>
           </div>
         )}
-      </div>
 
       {isCameraViewActive && cameraSettings && cameraSettings.aspectRatio !== 'free' && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center z-40">

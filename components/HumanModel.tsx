@@ -51,40 +51,40 @@ export const HumanModel: React.FC<HumanModelProps> = ({ rotation = [0, 0, 0], sc
   return (
     <group ref={group} rotation={rotation} scale={scale}>
       {/* Head */}
-      <Sphere args={[0.15, 16, 16]} position={[0, 1.7, 0]}>
+      <Sphere args={[0.15, 16, 16]} position={[0, 1.7, 0]} castShadow receiveShadow>
         <meshStandardMaterial color={bodyColor} />
       </Sphere>
       
       {/* Torso (Jersey) */}
-      <Box args={[0.3, 0.6, 0.15]} position={[0, 1.3, 0]}>
+      <Box args={[0.3, 0.6, 0.15]} position={[0, 1.3, 0]} castShadow receiveShadow>
         <meshStandardMaterial color={jerseyColor} />
       </Box>
 
       {/* Pelvis (Shorts) */}
-      <Box args={[0.3, 0.1, 0.15]} position={[0, 1.0, 0]}>
+      <Box args={[0.3, 0.1, 0.15]} position={[0, 1.0, 0]} castShadow receiveShadow>
         <meshStandardMaterial color={shortsColor} />
       </Box>
 
       {/* Arms (Body) */}
       <group position={[-0.2, 1.5, 0]} rotation={[0, 0, 0.3]}>
-        <Cylinder args={[0.04, 0.04, 0.5]} position={[0, -0.25, 0]}>
+        <Cylinder args={[0.04, 0.04, 0.5]} position={[0, -0.25, 0]} castShadow receiveShadow>
           <meshStandardMaterial color={bodyColor} />
         </Cylinder>
       </group>
       <group position={[0.2, 1.5, 0]} rotation={[0, 0, -0.3]}>
-        <Cylinder args={[0.04, 0.04, 0.5]} position={[0, -0.25, 0]}>
+        <Cylinder args={[0.04, 0.04, 0.5]} position={[0, -0.25, 0]} castShadow receiveShadow>
           <meshStandardMaterial color={bodyColor} />
         </Cylinder>
       </group>
 
       {/* Legs (Socks) */}
       <group position={[-0.1, 1.0, 0]} rotation={[0, 0, 0.1]}>
-        <Cylinder args={[0.05, 0.05, 0.8]} position={[0, -0.4, 0]}>
+        <Cylinder args={[0.05, 0.05, 0.8]} position={[0, -0.4, 0]} castShadow receiveShadow>
           <meshStandardMaterial color={socksColor} />
         </Cylinder>
       </group>
       <group position={[0.1, 1.0, 0]} rotation={[0, 0, -0.1]}>
-        <Cylinder args={[0.05, 0.05, 0.8]} position={[0, -0.4, 0]}>
+        <Cylinder args={[0.05, 0.05, 0.8]} position={[0, -0.4, 0]} castShadow receiveShadow>
           <meshStandardMaterial color={socksColor} />
         </Cylinder>
       </group>

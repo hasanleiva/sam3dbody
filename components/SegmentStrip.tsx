@@ -31,13 +31,7 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
         }
       })
       .catch(err => {
-        console.warn("Failed to fetch from API, using fallback textures", err);
-        const r2Base = import.meta.env.VITE_R2_STORAGE_URL || '';
-        const fallbacks = ['blue.svg', 'green.svg', 'red.svg', 'u0108p1.png'].map(f => ({
-          name: f,
-          path: r2Base ? `${r2Base}/textures/${f}` : `/textures/${f}`
-        }));
-        setAvailableTextures(fallbacks);
+        console.warn("Failed to fetch textures from API", err);
       });
   }, []);
 

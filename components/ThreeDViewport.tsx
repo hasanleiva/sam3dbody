@@ -108,17 +108,22 @@ const PersonMesh = ({ url, color, colors, textureUrl }: { url: string, color: st
 
   useEffect(() => {
     if (textureUrl) {
-      new THREE.TextureLoader().load(textureUrl, (t) => {
-        t.colorSpace = THREE.SRGBColorSpace;
-        // FBX models often need flipY inverted from whatever is failing.
-        // If false didn't work, try true. Default in Three is true.
-        t.flipY = true;
-        // Also add repeat wrapping just in case UVs are out of 0-1 bounds
-        t.wrapS = THREE.RepeatWrapping;
-        t.wrapT = THREE.RepeatWrapping;
-        t.needsUpdate = true;
-        setTexture(t);
-      });
+      new THREE.TextureLoader().load(
+        textureUrl, 
+        (t) => {
+          t.colorSpace = THREE.SRGBColorSpace;
+          t.flipY = true;
+          t.wrapS = THREE.RepeatWrapping;
+          t.wrapT = THREE.RepeatWrapping;
+          t.needsUpdate = true;
+          setTexture(t);
+        },
+        undefined,
+        (err) => {
+          console.warn(`Failed to load texture at ${textureUrl}`, err);
+          setTexture(null);
+        }
+      );
     } else {
       setTexture(null);
     }
@@ -457,8 +462,27 @@ const BillboardGroup = ({
   onUpdate?: (id: string, updates: Partial<BillboardData>) => void
 }) => {
   const [target, setTarget] = useState<THREE.Group | null>(null);
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
 
-  const texture = useLoader(THREE.TextureLoader, billboard.url);
+  useEffect(() => {
+    if (billboard.url) {
+      new THREE.TextureLoader().load(
+        billboard.url,
+        (t) => {
+          t.colorSpace = THREE.SRGBColorSpace;
+          t.needsUpdate = true;
+          setTexture(t);
+        },
+        undefined,
+        (err) => {
+          console.warn(`Failed to load billboard texture at ${billboard.url}`, err);
+          setTexture(null);
+        }
+      );
+    }
+  }, [billboard.url]);
+
+  if (!texture) return null;
 
   return (
     <>
@@ -1193,16 +1217,18 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
         return res.json();
       })
       .then(data => {
-        if (data.hdrs) setAvailableHdrs(data.hdrs);
+        if (data.hdrs) {
+           setAvailableHdrs(data.hdrs);
+           setPpSettings(p => {
+               if (p.hdr && !data.hdrs.find((h: any) => h.path === p.hdr)) {
+                   return { ...p, hdr: '' }; // reset invalid HDR
+               }
+               return p;
+           });
+        }
       })
       .catch(err => {
-         console.warn("Failed to fetch from API, using fallback HDRs", err);
-         const r2Base = import.meta.env.VITE_R2_STORAGE_URL || '';
-         const fallbacks = ['suburban_soccer_park_1k.hdr'].map(f => ({
-           name: f,
-           path: r2Base ? `${r2Base}/hdr/${f}` : `/hdr/${f}`
-         }));
-         setAvailableHdrs(fallbacks);
+         console.warn("Failed to fetch HDR maps from API", err);
       });
   }, []);
 
@@ -1376,7 +1402,7 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
 
         <Suspense fallback={null}>
           <RendererSettings />
-          {ppSettings.hdr ? (
+          {ppSettings.hdr && availableHdrs.some(h => h.path === ppSettings.hdr) ? (
             <Environment files={ppSettings.hdr} background={false} />
           ) : (
             <Environment preset={ppSettings.envPreset as any} />

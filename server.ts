@@ -214,42 +214,27 @@ app.get("/api/textures", async (req: any, res: any) => {
   const r2Base = process.env.VITE_R2_STORAGE_URL || process.env.R2_PUBLIC_URL || "";
   const bucketName = process.env.R2_BUCKET_NAME;
 
-  try {
-    if (r2Base && bucketName && process.env.R2_ACCOUNT_ID) {
-      const client = getS3Client();
-      const command = new ListObjectsV2Command({
-        Bucket: bucketName,
-        Prefix: "textures/"
-      });
-      const response = await client.send(command);
-      const textures = (response.Contents || [])
-        .filter((obj) => obj.Key && /\.(png|jpe?g|svg|webp)$/i.test(obj.Key))
-        .map((obj) => {
-          const fileName = obj.Key!.split('/').pop();
-          return { name: fileName, path: `${r2Base}/${obj.Key}` };
-        });
-      return res.json({ textures });
-    }
-  } catch (e) {
-    console.error("Error fetching textures from R2:", e);
-  }
-
-  const dir = process.env.NODE_ENV === "production"
-    ? path.join(process.cwd(), "dist", "textures")
-    : path.join(process.cwd(), "public", "textures");
-  
-  if (!fs.existsSync(dir)) {
+  if (!r2Base || !bucketName || !process.env.R2_ACCOUNT_ID) {
     return res.json({ textures: [] });
   }
 
   try {
-    const files = fs.readdirSync(dir);
-    const textures = files
-      .filter((f) => /\.(png|jpe?g|svg|webp)$/i.test(f))
-      .map((f) => ({ name: f, path: r2Base ? `${r2Base}/textures/${f}` : `/textures/${f}` }));
-    res.json({ textures });
+    const client = getS3Client();
+    const command = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: "textures/"
+    });
+    const response = await client.send(command);
+    const textures = (response.Contents || [])
+      .filter((obj) => obj.Key && /\.(png|jpe?g|svg|webp)$/i.test(obj.Key))
+      .map((obj) => {
+        const fileName = obj.Key!.split('/').pop();
+        return { name: fileName, path: `${r2Base}/${obj.Key}` };
+      });
+    return res.json({ textures });
   } catch (e) {
-    res.json({ textures: [] });
+    console.error("Error fetching textures from R2:", e);
+    return res.json({ textures: [] });
   }
 });
 
@@ -258,42 +243,27 @@ app.get("/api/hdr", async (req: any, res: any) => {
   const r2Base = process.env.VITE_R2_STORAGE_URL || process.env.R2_PUBLIC_URL || "";
   const bucketName = process.env.R2_BUCKET_NAME;
 
-  try {
-    if (r2Base && bucketName && process.env.R2_ACCOUNT_ID) {
-      const client = getS3Client();
-      const command = new ListObjectsV2Command({
-        Bucket: bucketName,
-        Prefix: "hdr/"
-      });
-      const response = await client.send(command);
-      const hdrs = (response.Contents || [])
-        .filter((obj) => obj.Key && /\.(hdr)$/i.test(obj.Key))
-        .map((obj) => {
-          const fileName = obj.Key!.split('/').pop();
-          return { name: fileName, path: `${r2Base}/${obj.Key}` };
-        });
-      return res.json({ hdrs });
-    }
-  } catch (e) {
-    console.error("Error fetching HDRs from R2:", e);
-  }
-
-  const dir = process.env.NODE_ENV === "production"
-    ? path.join(process.cwd(), "dist", "hdr")
-    : path.join(process.cwd(), "public", "hdr");
-  
-  if (!fs.existsSync(dir)) {
+  if (!r2Base || !bucketName || !process.env.R2_ACCOUNT_ID) {
     return res.json({ hdrs: [] });
   }
 
   try {
-    const files = fs.readdirSync(dir);
-    const hdrs = files
-      .filter((f) => /\.(hdr)$/i.test(f))
-      .map((f) => ({ name: f, path: r2Base ? `${r2Base}/hdr/${f}` : `/hdr/${f}` }));
-    res.json({ hdrs });
+    const client = getS3Client();
+    const command = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: "hdr/"
+    });
+    const response = await client.send(command);
+    const hdrs = (response.Contents || [])
+      .filter((obj) => obj.Key && /\.(hdr)$/i.test(obj.Key))
+      .map((obj) => {
+        const fileName = obj.Key!.split('/').pop();
+        return { name: fileName, path: `${r2Base}/${obj.Key}` };
+      });
+    return res.json({ hdrs });
   } catch (e) {
-    res.json({ hdrs: [] });
+    console.error("Error fetching HDRs from R2:", e);
+    return res.json({ hdrs: [] });
   }
 });
 

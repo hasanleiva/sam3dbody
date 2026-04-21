@@ -4,7 +4,7 @@ import { createServer as createViteServer } from "vite";
 import * as admin from "firebase-admin";
 import { fal } from "@fal-ai/client";
 import dotenv from "dotenv";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import fs from "fs";
 import path from "path";
 
@@ -210,7 +210,30 @@ app.get("/api/fal-scan/status/:requestId", verifyToken, async (req: any, res: an
 });
 
 // API Route to list textures
-app.get("/api/textures", (req: any, res: any) => {
+app.get("/api/textures", async (req: any, res: any) => {
+  const r2Base = process.env.VITE_R2_STORAGE_URL || process.env.R2_PUBLIC_URL || "";
+  const bucketName = process.env.R2_BUCKET_NAME;
+
+  try {
+    if (r2Base && bucketName && process.env.R2_ACCOUNT_ID) {
+      const client = getS3Client();
+      const command = new ListObjectsV2Command({
+        Bucket: bucketName,
+        Prefix: "textures/"
+      });
+      const response = await client.send(command);
+      const textures = (response.Contents || [])
+        .filter((obj) => obj.Key && /\.(png|jpe?g|svg|webp)$/i.test(obj.Key))
+        .map((obj) => {
+          const fileName = obj.Key!.split('/').pop();
+          return { name: fileName, path: `${r2Base}/${obj.Key}` };
+        });
+      return res.json({ textures });
+    }
+  } catch (e) {
+    console.error("Error fetching textures from R2:", e);
+  }
+
   const dir = process.env.NODE_ENV === "production"
     ? path.join(process.cwd(), "dist", "textures")
     : path.join(process.cwd(), "public", "textures");
@@ -220,7 +243,6 @@ app.get("/api/textures", (req: any, res: any) => {
   }
 
   try {
-    const r2Base = process.env.VITE_R2_STORAGE_URL || process.env.R2_PUBLIC_URL || "";
     const files = fs.readdirSync(dir);
     const textures = files
       .filter((f) => /\.(png|jpe?g|svg|webp)$/i.test(f))
@@ -232,7 +254,30 @@ app.get("/api/textures", (req: any, res: any) => {
 });
 
 // API Route to list HDR maps
-app.get("/api/hdr", (req: any, res: any) => {
+app.get("/api/hdr", async (req: any, res: any) => {
+  const r2Base = process.env.VITE_R2_STORAGE_URL || process.env.R2_PUBLIC_URL || "";
+  const bucketName = process.env.R2_BUCKET_NAME;
+
+  try {
+    if (r2Base && bucketName && process.env.R2_ACCOUNT_ID) {
+      const client = getS3Client();
+      const command = new ListObjectsV2Command({
+        Bucket: bucketName,
+        Prefix: "hdr/"
+      });
+      const response = await client.send(command);
+      const hdrs = (response.Contents || [])
+        .filter((obj) => obj.Key && /\.(hdr)$/i.test(obj.Key))
+        .map((obj) => {
+          const fileName = obj.Key!.split('/').pop();
+          return { name: fileName, path: `${r2Base}/${obj.Key}` };
+        });
+      return res.json({ hdrs });
+    }
+  } catch (e) {
+    console.error("Error fetching HDRs from R2:", e);
+  }
+
   const dir = process.env.NODE_ENV === "production"
     ? path.join(process.cwd(), "dist", "hdr")
     : path.join(process.cwd(), "public", "hdr");
@@ -242,7 +287,6 @@ app.get("/api/hdr", (req: any, res: any) => {
   }
 
   try {
-    const r2Base = process.env.VITE_R2_STORAGE_URL || process.env.R2_PUBLIC_URL || "";
     const files = fs.readdirSync(dir);
     const hdrs = files
       .filter((f) => /\.(hdr)$/i.test(f))

@@ -215,6 +215,7 @@ app.get("/api/textures", async (req: any, res: any) => {
   const bucketName = process.env.R2_BUCKET_NAME;
 
   if (!r2Base || !bucketName || !process.env.R2_ACCOUNT_ID) {
+    console.warn("Server is missing R2 environment variables for /api/textures endpoint. Requires VITE_R2_STORAGE_URL, R2_BUCKET_NAME, and R2_ACCOUNT_ID.");
     return res.json({ textures: [] });
   }
 
@@ -244,6 +245,7 @@ app.get("/api/hdr", async (req: any, res: any) => {
   const bucketName = process.env.R2_BUCKET_NAME;
 
   if (!r2Base || !bucketName || !process.env.R2_ACCOUNT_ID) {
+    console.warn("Server is missing R2 environment variables for /api/hdr endpoint. Requires VITE_R2_STORAGE_URL, R2_BUCKET_NAME, and R2_ACCOUNT_ID.");
     return res.json({ hdrs: [] });
   }
 

@@ -1358,7 +1358,7 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
   return (
     <div ref={containerRef} className="w-full h-full bg-[#D7D7D7] relative overflow-hidden rounded-lg">
       <Loader />
-      <Canvas shadows dpr={dpr} gl={{ preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: ppSettings.exposure }}>
+      <Canvas shadows dpr={dpr} gl={{ antialias: false, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: ppSettings.exposure }}>
         <CaptureManager onGrab={(state) => { threeContext.current = state; }} />
         <color attach="background" args={['#D7D7D7']} />
         <PerspectiveCamera 
@@ -1521,12 +1521,14 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
             );
           })}
           
-          <EffectComposer ref={composerRef}>
+          <EffectComposer ref={composerRef} disableNormalPass multisampling={0}>
             {ppSettings.ao && (
                <N8AO 
-                 aoRadius={1.5}
+                 halfRes
+                 aoRadius={ppSettings.aoRadius || 2.0}
                  intensity={ppSettings.aoIntensity}
-                 distanceFalloff={0.2}
+                 distanceFalloff={1.0}
+                 color="black"
                />
             )}
             {ppSettings.bloom && (
@@ -1539,8 +1541,8 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
             {ppSettings.dof && (
               <DepthOfField 
                  focusDistance={ppSettings.dofFocusDistance} 
-                 focalLength={0.02} 
-                 bokehScale={2} 
+                 focalLength={0.1} 
+                 bokehScale={ppSettings.dofBokehScale || 5} 
                  height={480} 
               />
             )}

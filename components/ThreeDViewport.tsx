@@ -769,7 +769,9 @@ const Pitch3D: React.FC<{ onClick?: (point: [number, number, number]) => void }>
   const pitchTexture = useMemo(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 2048;
-    canvas.height = 1324; // 105:68 ratio approx
+    // We are extending the dimensions from 105x68 to 125x88.
+    // 2048 * (88 / 125) = ~1441.79
+    canvas.height = 1442; 
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
@@ -777,8 +779,9 @@ const Pitch3D: React.FC<{ onClick?: (point: [number, number, number]) => void }>
     ctx.fillStyle = '#4f7b2c';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Mown Grass Stripes (18 stripes for a 105m pitch = ~5.8m each)
-    const stripeCount = 18;
+    // Mown Grass Stripes. Original had 18 for 105m. We are 125m now.
+    // 18 * (125 / 105) ~ 21.4. Let's use 22.
+    const stripeCount = 22;
     const stripeWidth = canvas.width / stripeCount;
     for (let i = 0; i < stripeCount; i++) {
       if (i % 2 === 0) {
@@ -812,9 +815,13 @@ const Pitch3D: React.FC<{ onClick?: (point: [number, number, number]) => void }>
         ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
-    // Scaling factors from world (105x68) to canvas
-    const scaleX = canvas.width / 105;
-    const scaleY = canvas.height / 68;
+    // Scaling factors from world (125x88) to canvas
+    const scaleX = canvas.width / 125;
+    const scaleY = canvas.height / 88;
+
+    // Pitch layout is heavily offset 10m inwards to stay 105x68 in the middle
+    const offsetX = 10 * scaleX;
+    const offsetY = 10 * scaleY;
 
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'; // Slightly softer white
     ctx.lineWidth = 4;
@@ -823,38 +830,38 @@ const Pitch3D: React.FC<{ onClick?: (point: [number, number, number]) => void }>
     // Draw lines from PITCH_LINES
     PITCH_LINES.forEach(line => {
       ctx.beginPath();
-      ctx.moveTo(line[0][0] * scaleX, line[0][1] * scaleY);
-      ctx.lineTo(line[1][0] * scaleX, line[1][1] * scaleY);
+      ctx.moveTo(offsetX + line[0][0] * scaleX, offsetY + line[0][1] * scaleY);
+      ctx.lineTo(offsetX + line[1][0] * scaleX, offsetY + line[1][1] * scaleY);
       ctx.stroke();
     });
 
     // Center Circle
     ctx.beginPath();
-    ctx.arc(52.5 * scaleX, 34 * scaleY, 9.15 * scaleX, 0, Math.PI * 2);
+    ctx.arc(offsetX + 52.5 * scaleX, offsetY + 34 * scaleY, 9.15 * scaleX, 0, Math.PI * 2);
     ctx.stroke();
 
     // Center Spot
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.beginPath();
-    ctx.arc(52.5 * scaleX, 34 * scaleY, 0.4 * scaleX, 0, Math.PI * 2);
+    ctx.arc(offsetX + 52.5 * scaleX, offsetY + 34 * scaleY, 0.4 * scaleX, 0, Math.PI * 2);
     ctx.fill();
 
     // Penalty Spots
     ctx.beginPath();
-    ctx.arc(11 * scaleX, 34 * scaleY, 0.4 * scaleX, 0, Math.PI * 2);
+    ctx.arc(offsetX + 11 * scaleX, offsetY + 34 * scaleY, 0.4 * scaleX, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc((105 - 11) * scaleX, 34 * scaleY, 0.4 * scaleX, 0, Math.PI * 2);
+    ctx.arc(offsetX + (105 - 11) * scaleX, offsetY + 34 * scaleY, 0.4 * scaleX, 0, Math.PI * 2);
     ctx.fill();
 
     // Penalty Arcs
     // Left
     ctx.beginPath();
-    ctx.arc(11 * scaleX, 34 * scaleY, 9.15 * scaleX, -0.926, 0.926);
+    ctx.arc(offsetX + 11 * scaleX, offsetY + 34 * scaleY, 9.15 * scaleX, -0.926, 0.926);
     ctx.stroke();
     // Right
     ctx.beginPath();
-    ctx.arc((105 - 11) * scaleX, 34 * scaleY, 9.15 * scaleX, Math.PI - 0.926, Math.PI + 0.926);
+    ctx.arc(offsetX + (105 - 11) * scaleX, offsetY + 34 * scaleY, 9.15 * scaleX, Math.PI - 0.926, Math.PI + 0.926);
     ctx.stroke();
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -864,10 +871,9 @@ const Pitch3D: React.FC<{ onClick?: (point: [number, number, number]) => void }>
 
   return (
     <group>
-      {/* Grass Surround (Outer) */}
+      {/* Main Pitch with Texture covering 125x88m including out of bounds area */}
       <mesh 
         rotation={[-Math.PI / 2, 0, 0]} 
-        position={[0, -0.01, 0]} 
         receiveShadow
         onClick={(e) => {
           if (onClick) {
@@ -877,21 +883,6 @@ const Pitch3D: React.FC<{ onClick?: (point: [number, number, number]) => void }>
         }}
       >
         <planeGeometry args={[125, 88]} />
-        <meshStandardMaterial color="#D7D7D7" roughness={1} />
-      </mesh>
-
-      {/* Main Pitch with Texture */}
-      <mesh 
-        rotation={[-Math.PI / 2, 0, 0]} 
-        receiveShadow
-        onClick={(e) => {
-          if (onClick) {
-            e.stopPropagation();
-            onClick([e.point.x, e.point.y, e.point.z]);
-          }
-        }}
-      >
-        <planeGeometry args={[105, 68]} />
         <meshStandardMaterial 
           map={pitchTexture} 
           roughness={0.8}

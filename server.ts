@@ -122,6 +122,32 @@ app.post("/api/upload-image", verifyToken, async (req: any, res: any) => {
 });
 
 // Proxy image route to bypass CORS for Cloudflare R2 images
+app.get("/api/proxy-model", async (req: any, res: any) => {
+  try {
+    const modelUrl = req.query.url as string;
+    if (!modelUrl) {
+      return res.status(400).json({ error: "Missing url parameter" });
+    }
+
+    const response = await fetch(modelUrl);
+    if (!response.ok) {
+      return res.status(response.status).json({ error: "Failed to fetch model" });
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const contentType = response.headers.get("content-type") || "application/octet-stream";
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "public, max-age=31536000");
+    res.send(buffer);
+  } catch (error: any) {
+    console.error("Proxy model error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 app.get("/api/proxy-image", async (req: any, res: any) => {
   try {
     const imageUrl = req.query.url as string;
@@ -265,6 +291,53 @@ app.get("/api/hdr", async (req: any, res: any) => {
   } catch (e) {
     console.error("Error fetching HDRs from R2:", e);
     return res.json({ hdrs: [] });
+  }
+});
+
+// API Route to list Player models
+app.get("/api/players", async (req: any, res: any) => {
+  const r2Base = process.env.VITE_R2_STORAGE_URL || process.env.R2_PUBLIC_URL || "";
+  const bucketName = process.env.R2_BUCKET_NAME;
+
+  if (!r2Base || !bucketName || !process.env.R2_ACCOUNT_ID) {
+    console.warn("Server is missing R2 environment variables for /api/players endpoint.");
+    return res.json({ models: [] });
+  }
+
+  try {
+    const client = getS3Client();
+    const command = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: "players/"
+    });
+    const response = await client.send(command);
+    
+    const models = (response.Contents || [])
+      .filter((obj) => obj.Key && /\.fbx$/i.test(obj.Key))
+      .map((obj) => {
+        const parts = obj.Key!.split('/');
+        const fileName = parts.pop() || '';
+        let team = 'Unknown Team';
+        let league = 'Unknown League';
+        
+        if (parts.length >= 4 && parts[0] === 'players') {
+            league = parts[1];
+            team = parts.length >= 4 ? parts[3] : parts[2];
+        } else if (parts.length >= 3) {
+            team = parts[parts.length - 1];
+        }
+
+        return { 
+          name: fileName.replace('.fbx', ''), 
+          path: `${r2Base}/${obj.Key}`,
+          team: team,
+          league: league
+        };
+      });
+    return res.json({ models });
+  } catch (e) {
+    console.error("Error fetching player models from R2:", e);
+    return res.json({ models: [] });
   }
 });
 

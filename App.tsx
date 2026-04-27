@@ -30,7 +30,9 @@ const cropImage = (img: HTMLImageElement, x: number, y: number, width: number, h
   });
 };
 
-const App: React.FC = () => {
+import { ErrorBoundary } from './components/ErrorBoundary';
+
+const AppContent: React.FC = () => {
   const { user } = useAuth();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSaveSceneModalOpen, setIsSaveSceneModalOpen] = useState(false);
@@ -66,16 +68,17 @@ const App: React.FC = () => {
   const formatTime = useCallback((secs: number) => {
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    const ms = Math.floor((secs % 1) * 1000);
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
   }, []);
 
   const applyDuration = useCallback((val: string) => {
     const parts = val.split(":");
     let secs = 10;
     if (parts.length === 2) {
-      secs = (parseInt(parts[0]) || 0) * 60 + (parseInt(parts[1]) || 0);
+      secs = (parseInt(parts[0]) || 0) * 60 + (parseFloat(parts[1]) || 0);
     } else {
-      secs = parseInt(val);
+      secs = parseFloat(val);
     }
     if (!isNaN(secs) && secs > 0) {
       secs = Math.min(3600, Math.max(1, secs));
@@ -1059,5 +1062,11 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+const App: React.FC = () => (
+  <ErrorBoundary>
+    <AppContent />
+  </ErrorBoundary>
+);
 
 export default App;

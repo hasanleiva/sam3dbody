@@ -14,6 +14,8 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
   const [menuPos, setMenuPos] = useState<{ top: number, left: number } | null>(null);
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [availableTextures, setAvailableTextures] = useState<{name: string; path: string}[]>([]);
+  const [availableModels, setAvailableModels] = useState<{name: string; path: string; team: string; league: string}[]>([]);
+  const [isModelsModalOpen, setIsModelsModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -32,6 +34,17 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
       })
       .catch(err => {
         console.warn("Failed to fetch textures from API", err);
+      });
+
+    fetch('/api/players')
+      .then(res => res.json())
+      .then(data => {
+        if (data.models) {
+          setAvailableModels(data.models);
+        }
+      })
+      .catch(err => {
+        console.warn("Failed to fetch players from API", err);
       });
   }, []);
 
@@ -84,6 +97,18 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
 
   return (
     <div className="h-32 px-6 flex items-center gap-3 overflow-x-auto bg-white border-b border-[#eee] no-scrollbar relative">
+      <button
+        onClick={() => setIsModelsModalOpen(true)}
+        className="w-16 h-16 rounded-lg flex items-center justify-center border-2 border-[#eee] text-[#999] hover:text-[#FC3434] hover:border-[#FC3434] flex-shrink-0 transition-all shadow-sm bg-white"
+        title="Manage 3D Body Models"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+      </button>
+
+      <div className="w-px h-12 bg-[#eee] flex-shrink-0 mx-1" />
+
       {people.map((person) => (
         <div key={person.id} className="relative flex flex-col items-center gap-2 flex-shrink-0">
           <div className="relative group">
@@ -209,6 +234,54 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
           {[1, 2, 3, 4, 5].map(i => (
             <div key={i} className="w-16 h-16 rounded-lg bg-[#f5f5f5] animate-pulse" />
           ))}
+        </div>
+      )}
+
+      {isModelsModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={() => setIsModelsModalOpen(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-[#eee]">
+              <h2 className="text-lg font-bold">Manage 3D Body Models</h2>
+              <button onClick={() => setIsModelsModalOpen(false)} className="p-1 hover:bg-[#f5f5f5] rounded-full text-[#999]">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1 flex flex-col gap-4">
+              {people.map(person => (
+                <div key={person.id} className="flex items-center justify-between border-b border-[#f5f5f5] pb-3 last:border-0 last:pb-0">
+                  <div className="flex items-center gap-3">
+                    <img 
+                      src={person.thumbnail?.startsWith('http') ? `${window.location.origin}/api/proxy-image?url=${encodeURIComponent(person.thumbnail)}` : person.thumbnail} 
+                      alt="" 
+                      className="w-10 h-10 rounded-md object-cover border border-[#eee]"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold">{person.name}</span>
+                      <span className="text-[10px] text-[#999]">
+                        {availableModels.find(m => m.path === person.bodyModelUrl)?.name || 'Default Body'}
+                      </span>
+                    </div>
+                  </div>
+                  <select
+                    className="text-sm border border-[#eee] rounded-md px-2 py-1 outline-none focus:border-[#FC3434] bg-white cursor-pointer w-48 text-ellipsis"
+                    value={person.bodyModelUrl || ''}
+                    onChange={(e) => {
+                      if (onUpdatePerson) {
+                        onUpdatePerson(person.id, { bodyModelUrl: e.target.value || undefined });
+                      }
+                    }}
+                  >
+                    <option value="">Default Mesh Rig</option>
+                    {availableModels.map(model => (
+                      <option key={model.path} value={model.path}>
+                        {model.team} - {model.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>

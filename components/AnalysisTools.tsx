@@ -468,7 +468,7 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
                   
                   {m.points.length === 2 && (
                     <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
+                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest block mb-1">Color</label>
                           <input 
@@ -491,6 +491,38 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
                               setMeasurements(prev => prev.map(meas => meas.id === m.id ? { ...meas, textColor: newColor } : meas));
                             }}
                             className="w-full h-8 rounded cursor-pointer border border-[#ddd]" 
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest block mb-1">Start Time (s)</label>
+                          <input 
+                            type="number" 
+                            step="0.1"
+                            min="0"
+                            placeholder="0.0"
+                            value={m.startTime ?? ''} 
+                            onChange={(e) => {
+                              const val = e.target.value ? parseFloat(e.target.value) : undefined;
+                              setMeasurements(prev => prev.map(meas => meas.id === m.id ? { ...meas, startTime: val } : meas));
+                            }}
+                            className="w-full h-8 px-2 rounded border border-[#ddd] text-xs font-mono" 
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest block mb-1">End Time (s)</label>
+                          <input 
+                            type="number" 
+                            step="0.1"
+                            min="0"
+                            placeholder="∞"
+                            value={m.endTime ?? ''} 
+                            onChange={(e) => {
+                              const val = e.target.value ? parseFloat(e.target.value) : undefined;
+                              setMeasurements(prev => prev.map(meas => meas.id === m.id ? { ...meas, endTime: val } : meas));
+                            }}
+                            className="w-full h-8 px-2 rounded border border-[#ddd] text-xs font-mono" 
                           />
                         </div>
                       </div>
@@ -618,6 +650,38 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
                                 setMeasurements(prev => prev.map(meas => meas.id === activeMeasurement.id ? { ...meas, textColor: newColor } : meas));
                               }}
                               className="w-full h-8 rounded cursor-pointer border border-[#ddd]" 
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest block mb-1">Start Time (s)</label>
+                            <input 
+                              type="number" 
+                              step="0.1"
+                              min="0"
+                              placeholder="0.0"
+                              value={activeMeasurement.startTime ?? ''} 
+                              onChange={(e) => {
+                                const val = e.target.value ? parseFloat(e.target.value) : undefined;
+                                setMeasurements(prev => prev.map(meas => meas.id === activeMeasurement.id ? { ...meas, startTime: val } : meas));
+                              }}
+                              className="w-full h-8 px-2 rounded border border-[#ddd] text-xs font-mono" 
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest block mb-1">End Time (s)</label>
+                            <input 
+                              type="number" 
+                              step="0.1"
+                              min="0"
+                              placeholder="∞"
+                              value={activeMeasurement.endTime ?? ''} 
+                              onChange={(e) => {
+                                const val = e.target.value ? parseFloat(e.target.value) : undefined;
+                                setMeasurements(prev => prev.map(meas => meas.id === activeMeasurement.id ? { ...meas, endTime: val } : meas));
+                              }}
+                              className="w-full h-8 px-2 rounded border border-[#ddd] text-xs font-mono" 
                             />
                           </div>
                         </div>
@@ -784,6 +848,39 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
                         setBillboards(prev => prev.map(b => b.id === selectedBillboardId ? { ...b, height: val } : b));
                       }}
                       className="w-full accent-[#FC3434]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-[#eee]">
+                  <div>
+                    <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest block mb-1">Start Time (s)</label>
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      min="0"
+                      placeholder="0.0"
+                      value={billboards.find(b => b.id === selectedBillboardId)?.startTime ?? ''} 
+                      onChange={(e) => {
+                        const val = e.target.value ? parseFloat(e.target.value) : undefined;
+                        setBillboards(prev => prev.map(b => b.id === selectedBillboardId ? { ...b, startTime: val } : b));
+                      }}
+                      className="w-full h-8 px-2 rounded border border-[#ddd] text-xs font-mono" 
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest block mb-1">End Time (s)</label>
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      min="0"
+                      placeholder="∞"
+                      value={billboards.find(b => b.id === selectedBillboardId)?.endTime ?? ''} 
+                      onChange={(e) => {
+                        const val = e.target.value ? parseFloat(e.target.value) : undefined;
+                        setBillboards(prev => prev.map(b => b.id === selectedBillboardId ? { ...b, endTime: val } : b));
+                      }}
+                      className="w-full h-8 px-2 rounded border border-[#ddd] text-xs font-mono" 
                     />
                   </div>
                 </div>

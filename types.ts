@@ -17,7 +17,8 @@ export interface DetectedPerson {
     activity: string;
   };
   worldPos?: [number, number]; // [x, y] in meters on the pitch
-  meshUrl?: string;
+  meshUrl?: string; // High-res PLY
+  bodyModelUrl?: string; // Replaced 3D character model URL
   textureUrl?: string; // Adding textureUrl optional property
   colors?: {
     jersey: string;
@@ -43,6 +44,8 @@ export interface DistanceMeasurement {
   color?: string;
   text?: string;
   textColor?: string;
+  startTime?: number;
+  endTime?: number;
 }
 
 export interface BillboardData {
@@ -52,6 +55,8 @@ export interface BillboardData {
   rotation?: [number, number, number];
   width: number;
   height: number;
+  startTime?: number;
+  endTime?: number;
 }
 
 export interface CameraKeyframe {

@@ -13,6 +13,38 @@ import { useLoader, useThree, useFrame } from '@react-three/fiber';
 
 declare const cv: any;
 
+const getAnimationState = (time: number | undefined, start: number | undefined, end: number | undefined) => {
+  if (time === undefined) return { scale: 1, opacity: 1, visible: true, progress: 1, phase: 'sustain' as const };
+  
+  const FADE_DURATION = 0.5; // 500ms fade in/out
+  
+  if (start !== undefined && start !== null && time < start + FADE_DURATION) {
+    if (time < start) return { scale: 0, opacity: 0, visible: false, progress: 0, phase: 'before' as const };
+    const progress = (time - start) / FADE_DURATION;
+    return {
+      scale: 0.8 + (0.2 * progress),
+      opacity: progress,
+      visible: true,
+      progress,
+      phase: 'enter' as const
+    };
+  }
+  
+  if (end !== undefined && end !== null && time > end - FADE_DURATION) {
+    if (time > end) return { scale: 0, opacity: 0, visible: false, progress: 1, phase: 'after' as const };
+    const progress = (end - time) / FADE_DURATION;
+    return {
+      scale: 0.8 + (0.2 * Math.max(0, progress)),
+      opacity: Math.max(0, progress),
+      visible: true,
+      progress,
+      phase: 'exit' as const
+    };
+  }
+  
+  return { scale: 1, opacity: 1, visible: true, progress: 1, phase: 'sustain' as const };
+};
+
 const CaptureManager = ({ onGrab }: { onGrab: (state: any) => void }) => {
   const state = useThree();
   
@@ -100,16 +132,35 @@ import { extractRigPose } from '../utils/poseExtractor';
 
 const R2_BASE = import.meta.env.VITE_R2_STORAGE_URL || '';
 
-const PersonMesh = ({ url, color, colors, textureUrl }: { url: string, color: string, colors?: { jersey: string, shorts: string, socks: string, body: string }, textureUrl?: string }) => {
-  const plyGeometry = useLoader(PLYLoader, url);
-  const fbxRigGroup = useLoader(FBXLoader, R2_BASE ? `${R2_BASE}/models/mesh_rig.fbx` : '/models/mesh_rig.fbx');
-  const fbxClothGroup = useLoader(FBXLoader, R2_BASE ? `${R2_BASE}/models/mesh_rig_cloth.fbx` : '/models/mesh_rig_cloth.fbx');
+export const getProxiedUrl = (urlStr: string) => {
+  if (!urlStr) return urlStr;
+  if (urlStr.startsWith('http')) {
+    return `/api/proxy-model?url=${encodeURIComponent(urlStr)}`;
+  }
+  return urlStr;
+};
+
+const PersonMesh = ({ url, color, colors, textureUrl, bodyModelUrl }: { url: string, color: string, colors?: { jersey: string, shorts: string, socks: string, body: string }, textureUrl?: string, bodyModelUrl?: string }) => {
+  const getOldProxiedUrl = (urlStr: string) => { // keep this just in case I missed any usage, but replace usages with global one
+    if (urlStr.startsWith('http')) {
+      return `/api/proxy-model?url=${encodeURIComponent(urlStr)}`;
+    }
+    return urlStr;
+  }
+
+  const plyGeometry = useLoader(PLYLoader, getProxiedUrl(url));
+  
+  const fbxRigGroup = useLoader(FBXLoader, getProxiedUrl(R2_BASE ? `${R2_BASE}/models/mesh_rig.fbx` : '/models/mesh_rig.fbx'));
+  
+  const currentBodyUrl = bodyModelUrl || (R2_BASE ? `${R2_BASE}/models/mesh_rig_cloth.fbx` : '/models/mesh_rig_cloth.fbx');
+  const fbxClothGroup = useLoader(FBXLoader, getProxiedUrl(currentBodyUrl));
+  
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
 
   useEffect(() => {
     if (textureUrl) {
       new THREE.TextureLoader().load(
-        textureUrl, 
+        getProxiedUrl(textureUrl), 
         (t) => {
           t.colorSpace = THREE.SRGBColorSpace;
           t.flipY = true;
@@ -226,7 +277,11 @@ const PersonMesh = ({ url, color, colors, textureUrl }: { url: string, color: st
               mat.metalness = 0.0;
               mat.envMapIntensity = 4.0;
 
-              if (texture) {
+              // Usually new models have 'materialkit' explicitly for the jersey.
+              // Older models might just apply it universally if bodyModelUrl is not supplied.
+              const isJerseyMaterial = mat.name.toLowerCase().includes('materialkit') || !bodyModelUrl || mat.name === 'Material';
+
+              if (texture && isJerseyMaterial) {
                 // Texture mode: boost via emissiveMap
                 mat.map = texture;
                 mat.emissiveMap = texture;
@@ -452,17 +507,21 @@ const BillboardGroup = ({
   onSelect,
   activeTool,
   transformMode = 'translate',
-  onUpdate
+  onUpdate,
+  timelineTime
 }: {
   billboard: BillboardData,
   isSelected: boolean,
   onSelect?: (id: string) => void,
   activeTool?: string | null,
   transformMode?: 'translate' | 'rotate',
-  onUpdate?: (id: string, updates: Partial<BillboardData>) => void
+  onUpdate?: (id: string, updates: Partial<BillboardData>) => void,
+  timelineTime?: number
 }) => {
   const [target, setTarget] = useState<THREE.Group | null>(null);
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
+
+  const anim = getAnimationState(timelineTime, billboard.startTime, billboard.endTime);
 
   useEffect(() => {
     if (billboard.url) {
@@ -482,7 +541,7 @@ const BillboardGroup = ({
     }
   }, [billboard.url]);
 
-  if (!texture) return null;
+  if (!texture || !anim.visible) return null;
 
   return (
     <>
@@ -490,6 +549,7 @@ const BillboardGroup = ({
         ref={setTarget}
         position={billboard.position}
         rotation={billboard.rotation || [0, 0, 0]}
+        scale={[anim.scale, anim.scale, anim.scale]}
         onClick={(e) => {
           if (activeTool === 'billboard' || activeTool === 'transform') {
             e.stopPropagation();
@@ -507,7 +567,7 @@ const BillboardGroup = ({
       >
         <mesh position={[0, billboard.height / 2, 0]} castShadow>
           <planeGeometry args={[billboard.width, billboard.height]} />
-          <meshBasicMaterial map={texture} transparent side={THREE.DoubleSide} />
+          <meshBasicMaterial map={texture} transparent opacity={anim.opacity} side={THREE.DoubleSide} />
         </mesh>
       </group>
 
@@ -531,7 +591,7 @@ const BillboardGroup = ({
   );
 };
 
-const ArcArrow: React.FC<{ start: [number, number, number], end: [number, number, number], color: string, isActive: boolean, text?: string, textColor?: string }> = ({ start, end, color, isActive, text, textColor }) => {
+const ArcArrow: React.FC<{ start: [number, number, number], end: [number, number, number], color: string, isActive: boolean, text?: string, textColor?: string, opacity?: number, drawProgress?: number }> = ({ start, end, color, isActive, text, textColor, opacity = 1, drawProgress = 1 }) => {
   const curve = useMemo(() => {
     const startVec = new THREE.Vector3(start[0], start[1], start[2]);
     const endVec = new THREE.Vector3(end[0], end[1], end[2]);
@@ -552,7 +612,10 @@ const ArcArrow: React.FC<{ start: [number, number, number], end: [number, number
     
     const curveLength = curve.getLength();
     const arrowLength = 1.5;
-    const tBase = curveLength > arrowLength ? 1 - (arrowLength / curveLength) : 0.01;
+    
+    const tipT = Math.max(0.01, drawProgress);
+    const arrowFraction = curveLength > 0 ? arrowLength / curveLength : 0.01;
+    const tBase = Math.max(0, tipT - arrowFraction);
     
     const vertices = [];
     const indices = [];
@@ -606,8 +669,15 @@ const ArcArrow: React.FC<{ start: [number, number, number], end: [number, number
     rGeom.computeVertexNormals();
 
     const basePt = curve.getPoint(tBase);
-    const tipPt = curve.getPoint(1);
-    const arrowDir = new THREE.Vector3().subVectors(tipPt, basePt).normalize();
+    const tipPt = curve.getPoint(tipT);
+    const arrowDir = new THREE.Vector3().subVectors(tipPt, basePt);
+    
+    if (arrowDir.lengthSq() < 0.0001 || isNaN(arrowDir.x)) {
+      arrowDir.copy(curve.getTangent(tipT).normalize());
+    } else {
+      arrowDir.normalize();
+    }
+    
     const actualArrowLength = basePt.distanceTo(tipPt);
 
     const arrowShape = new THREE.Shape();
@@ -659,31 +729,31 @@ const ArcArrow: React.FC<{ start: [number, number, number], end: [number, number
       shadowRibbonGeometry: shadowRGeom,
       shadowArrowGeometry: shadowAGeom
     };
-  }, [curve]);
+  }, [curve, drawProgress]);
 
   return (
     <group>
       {/* Shadow */}
       <mesh geometry={shadowRibbonGeometry}>
-        <meshBasicMaterial color="#000000" opacity={0.3} transparent depthWrite={false} />
+        <meshBasicMaterial color="#000000" opacity={0.3 * opacity} transparent depthWrite={false} />
       </mesh>
       <mesh geometry={shadowArrowGeometry}>
-        <meshBasicMaterial color="#000000" opacity={0.3} transparent depthWrite={false} />
+        <meshBasicMaterial color="#000000" opacity={0.3 * opacity} transparent depthWrite={false} />
       </mesh>
       
       {/* Main Arrow */}
       <mesh geometry={ribbonGeometry}>
-        <meshStandardMaterial color={color} opacity={isActive ? 1 : 0.8} transparent side={THREE.DoubleSide} />
+        <meshStandardMaterial color={color} opacity={(isActive ? 1 : 0.8) * opacity} transparent side={THREE.DoubleSide} />
       </mesh>
       <mesh geometry={arrowGeometry} position={arrowPosition} rotation={arrowRotation}>
-        <meshStandardMaterial color={color} opacity={isActive ? 1 : 0.8} transparent side={THREE.DoubleSide} />
+        <meshStandardMaterial color={color} opacity={(isActive ? 1 : 0.8) * opacity} transparent side={THREE.DoubleSide} />
       </mesh>
 
-      {text && (
+      {text && opacity > 0.05 && (
         <Html position={[curve.getPoint(0.5).x, curve.getPoint(0.5).y + 0.5, curve.getPoint(0.5).z]} center zIndexRange={[100, 0]}>
           <div 
             className="px-2 py-1 bg-white/10 backdrop-blur-sm rounded shadow-sm font-bold text-xs whitespace-nowrap pointer-events-none"
-            style={{ color: textColor || color, textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}
+            style={{ color: textColor || color, textShadow: '0 1px 2px rgba(0,0,0,0.5)', opacity }}
           >
             {text}
           </div>
@@ -1394,7 +1464,7 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
         <Suspense fallback={null}>
           <RendererSettings />
           {ppSettings.hdr && availableHdrs.some(h => h.path === ppSettings.hdr) ? (
-            <Environment files={ppSettings.hdr} background={false} />
+            <Environment files={getProxiedUrl(ppSettings.hdr)} background={false} />
           ) : (
             <Environment preset={ppSettings.envPreset as any} />
           )}
@@ -1429,6 +1499,7 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
               onSelect={setSelectedBillboardId}
               activeTool={activeTool}
               transformMode={transformMode}
+              timelineTime={timelineTime}
               onUpdate={(id, updates) => {
                 if (setBillboards) {
                   setBillboards(prev => prev.map(bb => bb.id === id ? { ...bb, ...updates } : bb));
@@ -1440,17 +1511,25 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
           {measurements && measurements.map(m => {
             if (m.points.length === 0) return null;
             
+            const anim = getAnimationState(timelineTime, m.startTime, m.endTime);
+            if (!anim.visible) return null;
+
             const isActive = m.id === activeMeasurementId;
             const color = isActive ? "#10b981" : "#059669";
             
             if (m.type === 'arrow') {
               const arrowColor = m.color || (isActive ? "#ffffff" : "#e5e5e5");
+              const isEntering = anim.phase === 'enter';
+              const arrowScale = isEntering ? 1 : anim.scale;
+              const arrowOpacity = isEntering ? 1 : anim.opacity;
+              const drawProgress = isEntering ? anim.progress : 1;
+              
               return (
-                <group key={m.id}>
+                <group key={m.id} scale={[arrowScale, arrowScale, arrowScale]}>
                   {m.points.length === 1 && (
                     <mesh position={[m.points[0][0], 0.05, m.points[0][2]]}>
                       <sphereGeometry args={[0.3, 16, 16]} />
-                      <meshBasicMaterial color={arrowColor} />
+                      <meshBasicMaterial color={arrowColor} transparent opacity={arrowOpacity} />
                     </mesh>
                   )}
                   {m.points.length === 2 && (
@@ -1461,6 +1540,8 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
                       isActive={isActive}
                       text={m.text}
                       textColor={m.textColor}
+                      opacity={arrowOpacity}
+                      drawProgress={drawProgress}
                     />
                   )}
                 </group>
@@ -1468,11 +1549,11 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
             }
             
             return (
-              <group key={m.id}>
+              <group key={m.id} scale={[anim.scale, anim.scale, anim.scale]}>
                 {m.points.map((point, i) => (
                   <mesh key={`dp-${m.id}-${i}`} position={[point[0], 0.05, point[2]]}>
                     <sphereGeometry args={[0.3, 16, 16]} />
-                    <meshBasicMaterial color={m.color || color} />
+                    <meshBasicMaterial color={m.color || color} transparent opacity={anim.opacity} />
                   </mesh>
                 ))}
                 {m.points.length === 2 && (
@@ -1485,7 +1566,7 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
                       color={m.color || color}
                       lineWidth={9}
                       transparent
-                      opacity={isActive ? 1 : 0.6}
+                      opacity={isActive ? anim.opacity : 0.6 * anim.opacity}
                     />
                     <Text
                       position={[
@@ -1500,6 +1581,8 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
                       rotation={[-Math.PI / 2, 0, 0]}
                       outlineWidth={0.1}
                       outlineColor="#000000"
+                      fillOpacity={anim.opacity}
+                      outlineOpacity={anim.opacity}
                     >
                       {m.text || `${Math.sqrt(
                         Math.pow(m.points[0][0] - m.points[1][0], 2) + 
@@ -1512,6 +1595,7 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
             );
           })}
           
+          {/* @ts-ignore */}
           <EffectComposer ref={composerRef} disableNormalPass multisampling={0}>
             {ppSettings.ao && (
                <N8AO 

@@ -135,10 +135,7 @@ const R2_BASE = import.meta.env.VITE_R2_STORAGE_URL || '';
 export const getProxiedUrl = (urlStr: string) => {
   if (!urlStr) return urlStr;
   
-  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-  const isServerAvailable = hostname === 'localhost' || hostname.includes('127.0.0.1') || hostname.includes('.run.app');
-  
-  if (urlStr.startsWith('http') && isServerAvailable) {
+  if (urlStr.startsWith('http')) {
     return `/api/proxy-model?url=${encodeURIComponent(urlStr)}`;
   }
   return urlStr;
@@ -157,6 +154,7 @@ const PersonMesh = ({ url, color, colors, textureUrl, bodyModelUrl }: { url: str
   const fbxRigGroup = useLoader(FBXLoader, getProxiedUrl(R2_BASE ? `${R2_BASE}/models/mesh_rig.fbx` : '/models/mesh_rig.fbx'));
   
   const currentBodyUrl = bodyModelUrl || (R2_BASE ? `${R2_BASE}/models/mesh_rig_cloth.fbx` : '/models/mesh_rig_cloth.fbx');
+  console.log("PersonMesh Render: url=", url, "bodyModelUrl=", bodyModelUrl, "currentBodyUrl=", currentBodyUrl);
   const fbxClothGroup = useLoader(FBXLoader, getProxiedUrl(currentBodyUrl));
   
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
@@ -263,8 +261,8 @@ const PersonMesh = ({ url, color, colors, textureUrl, bodyModelUrl }: { url: str
         }
       });
       
-      // Try to copy vertex colors from the PLY mesh to the cloth mesh!
-      if (unrolledPly.attributes.color) {
+      // Try to copy vertex colors from the PLY mesh to the cloth mesh (only for default rig)
+      if (unrolledPly.attributes.color && !bodyModelUrl) {
         clothSkinnedMesh.geometry.setAttribute('color', unrolledPly.attributes.color);
       }
       
@@ -294,7 +292,15 @@ const PersonMesh = ({ url, color, colors, textureUrl, bodyModelUrl }: { url: str
                 mat.vertexColors = false;
                 mat.color.set(0xffffff);
                 mat.needsUpdate = true;
-              } else if (unrolledPly.attributes.color) {
+              } else if (bodyModelUrl && mat.map) {
+                // Keep embedded texture from custom FBX!
+                mat.emissiveMap = mat.map;
+                mat.emissive.set(0xffffff);
+                mat.emissiveIntensity = 0.2;
+                mat.vertexColors = false;
+                mat.color.set(0xffffff);
+                mat.needsUpdate = true;
+              } else if (unrolledPly.attributes.color && !bodyModelUrl) {
                 // Vertex color mode: emissive white tint to lift dark colors
                 mat.vertexColors = true;
                 mat.map = null;
@@ -343,7 +349,7 @@ const PersonMesh = ({ url, color, colors, textureUrl, bodyModelUrl }: { url: str
     }
 
     return { finalScene: clothScene, scaleOffset: adjustedScale, yOffset: adjustedYOffset, xOffset: adjustedXOffset, zOffset: adjustedZOffset };
-  }, [plyGeometry, fbxRigGroup, fbxClothGroup, color, colors, texture]);
+  }, [plyGeometry, fbxRigGroup, fbxClothGroup, color, colors, texture, bodyModelUrl]);
 
   if (!finalScene) return null;
 
@@ -440,7 +446,7 @@ const PersonGroup = ({
         {isSelected && activeTool !== 'transform' ? (
           <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
             {person.meshUrl ? (
-              <PersonMesh url={person.meshUrl} color="#FC3434" colors={person.colors} textureUrl={person.textureUrl} />
+              <PersonMesh url={person.meshUrl} color="#FC3434" colors={person.colors} textureUrl={person.textureUrl} bodyModelUrl={person.bodyModelUrl} />
             ) : (
               <HumanModel 
                 rotation={[0, 0, 0]} 
@@ -452,7 +458,7 @@ const PersonGroup = ({
           </Float>
         ) : (
           person.meshUrl ? (
-            <PersonMesh url={person.meshUrl} color={isSelected ? "#FC3434" : "#999"} colors={person.colors} textureUrl={person.textureUrl} />
+            <PersonMesh url={person.meshUrl} color={isSelected ? "#FC3434" : "#999"} colors={person.colors} textureUrl={person.textureUrl} bodyModelUrl={person.bodyModelUrl} />
           ) : (
             <HumanModel 
               rotation={[0, 0, 0]} 

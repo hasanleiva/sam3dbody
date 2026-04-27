@@ -34,17 +34,34 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
       })
       .catch(err => {
         console.warn("Failed to fetch textures from API", err);
+        const R2_BASE = import.meta.env.VITE_R2_STORAGE_URL || '';
+        setAvailableTextures([
+          { name: 'Red Pattern', path: R2_BASE ? `${R2_BASE}/textures/red_pattern.png` : '/textures/red_pattern.png' },
+          { name: 'Blue Stripes', path: R2_BASE ? `${R2_BASE}/textures/blue_stripes.png` : '/textures/blue_stripes.png' },
+        ]);
       });
 
     fetch('/api/players')
-      .then(res => res.json())
+      .then(res => {
+        const contentType = res.headers.get("content-type");
+        if (!res.ok || !contentType || !contentType.includes("application/json")) {
+           throw new TypeError("Received non-JSON response for players");
+        }
+        return res.json();
+      })
       .then(data => {
         if (data.models) {
           setAvailableModels(data.models);
         }
       })
       .catch(err => {
-        console.warn("Failed to fetch players from API", err);
+        console.warn("Failed to fetch players from API, using fallback", err);
+        const R2_BASE = import.meta.env.VITE_R2_STORAGE_URL || '';
+        setAvailableModels([
+          { name: 'Default Rig', path: R2_BASE ? `${R2_BASE}/models/mesh_rig.fbx` : '/models/mesh_rig.fbx', team: 'System', league: 'Base' },
+          { name: 'Cloth Rig', path: R2_BASE ? `${R2_BASE}/models/mesh_rig_cloth.fbx` : '/models/mesh_rig_cloth.fbx', team: 'System', league: 'Base' },
+          { name: 'Kobe Bryant', path: R2_BASE ? `${R2_BASE}/players/basketball/nba/lakers/kobe.fbx` : '/models/mesh_rig.fbx', team: 'Lakers', league: 'NBA' }, 
+        ]);
       });
   }, []);
 

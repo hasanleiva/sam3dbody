@@ -15,6 +15,7 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [availableTextures, setAvailableTextures] = useState<{name: string; path: string}[]>([]);
   const [availableModels, setAvailableModels] = useState<{name: string; path: string; team: string; league: string}[]>([]);
+  const [personTeamFilters, setPersonTeamFilters] = useState<Record<string, string>>({});
   const [isModelsModalOpen, setIsModelsModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -264,39 +265,69 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
               </button>
             </div>
             <div className="p-4 overflow-y-auto flex-1 flex flex-col gap-4">
-              {people.map(person => (
-                <div key={person.id} className="flex items-center justify-between border-b border-[#f5f5f5] pb-3 last:border-0 last:pb-0">
-                  <div className="flex items-center gap-3">
-                    <img 
-                      src={person.thumbnail?.startsWith('http') ? `${window.location.origin}/api/proxy-image?url=${encodeURIComponent(person.thumbnail)}` : person.thumbnail} 
-                      alt="" 
-                      className="w-10 h-10 rounded-md object-cover border border-[#eee]"
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold">{person.name}</span>
-                      <span className="text-[10px] text-[#999]">
-                        {availableModels.find(m => m.path === person.bodyModelUrl)?.name || 'Default Body'}
-                      </span>
+              {people.map(person => {
+                const currentModel = availableModels.find(m => m.path === person.bodyModelUrl);
+                const selectedTeam = personTeamFilters[person.id] !== undefined 
+                    ? personTeamFilters[person.id] 
+                    : (currentModel?.team && currentModel.team !== 'Unknown Team' && currentModel.team !== 'System' ? currentModel.team : '');
+                
+                const teamOptions = Array.from(new Set(
+                    availableModels
+                        .map(m => m.team)
+                        .filter(team => team && team !== 'Unknown Team' && team !== 'System')
+                )).sort();
+                
+                const modelsForTeam = availableModels.filter(m => m.team === selectedTeam);
+                const visibleModels = selectedTeam ? modelsForTeam : availableModels.filter(m => m.team !== 'Unknown Team' && m.team !== 'System');
+
+                return (
+                  <div key={person.id} className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#f5f5f5] pb-3 last:border-0 last:pb-0 gap-3">
+                    <div className="flex items-center gap-3">
+                      <img 
+                        src={person.thumbnail?.startsWith('http') ? `${window.location.origin}/api/proxy-image?url=${encodeURIComponent(person.thumbnail)}` : person.thumbnail} 
+                        alt="" 
+                        className="w-10 h-10 rounded-md object-cover border border-[#eee]"
+                      />
+                      <div className="flex flex-col flex-1 min-w-[100px]">
+                        <span className="text-sm font-bold">{person.name}</span>
+                        <span className="text-[10px] text-[#999] truncate">
+                          {currentModel?.name || 'Default Body'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <select
+                        className="text-sm border border-[#eee] rounded-md px-2 py-1 outline-none focus:border-[#FC3434] bg-white cursor-pointer w-32 max-w-[120px] text-ellipsis"
+                        value={selectedTeam}
+                        onChange={(e) => {
+                          setPersonTeamFilters(prev => ({ ...prev, [person.id]: e.target.value }));
+                        }}
+                      >
+                        <option value="">All Teams</option>
+                        {teamOptions.map(team => (
+                          <option key={team} value={team}>{team}</option>
+                        ))}
+                      </select>
+                      <select
+                        className="text-sm border border-[#eee] rounded-md px-2 py-1 outline-none focus:border-[#FC3434] bg-white cursor-pointer w-40 max-w-[160px] text-ellipsis"
+                        value={person.bodyModelUrl || ''}
+                        onChange={(e) => {
+                          if (onUpdatePerson) {
+                            onUpdatePerson(person.id, { bodyModelUrl: e.target.value || undefined });
+                          }
+                        }}
+                      >
+                        <option value="">Default Mesh Rig</option>
+                        {visibleModels.map(model => (
+                          <option key={model.path} value={model.path}>
+                            {!selectedTeam && model.team && model.team !== 'System' ? `${model.team} - ` : ''}{model.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
-                  <select
-                    className="text-sm border border-[#eee] rounded-md px-2 py-1 outline-none focus:border-[#FC3434] bg-white cursor-pointer w-48 text-ellipsis"
-                    value={person.bodyModelUrl || ''}
-                    onChange={(e) => {
-                      if (onUpdatePerson) {
-                        onUpdatePerson(person.id, { bodyModelUrl: e.target.value || undefined });
-                      }
-                    }}
-                  >
-                    <option value="">Default Mesh Rig</option>
-                    {availableModels.map(model => (
-                      <option key={model.path} value={model.path}>
-                        {model.team} - {model.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

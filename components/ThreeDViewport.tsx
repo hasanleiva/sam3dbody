@@ -134,7 +134,11 @@ const R2_BASE = import.meta.env.VITE_R2_STORAGE_URL || '';
 
 export const getProxiedUrl = (urlStr: string) => {
   if (!urlStr) return urlStr;
-  if (urlStr.startsWith('http')) {
+  
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isServerAvailable = hostname === 'localhost' || hostname.includes('127.0.0.1') || hostname.includes('.run.app');
+  
+  if (urlStr.startsWith('http') && isServerAvailable) {
     return `/api/proxy-model?url=${encodeURIComponent(urlStr)}`;
   }
   return urlStr;

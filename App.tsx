@@ -518,11 +518,7 @@ const AppContent: React.FC = () => {
         (progress) => {
           // Could dispatch to a state to show progress!
           console.log(`Exporting video: ${Math.round(progress * 100)}%`);
-        },
-        (time) => new Promise<void>(resolve => {
-          setState(prev => ({...prev, timelineTime: time}));
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-        })
+        }
       );
       
       const a = document.createElement('a');

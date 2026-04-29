@@ -400,7 +400,7 @@ export interface ThreeDViewportRef {
   captureHighResFrame: (width: number, height: number) => HTMLCanvasElement | null;
   startRecording: (width: number, height: number) => void;
   stopRecording: () => void;
-  encodeOfflineVideo?: (width: number, height: number, fps: number, duration: number, keyframes: CameraKeyframe[], onProgress: (p: number) => void, setTimeAsync?: (time: number) => Promise<void>) => Promise<Blob>;
+  encodeOfflineVideo?: (width: number, height: number, fps: number, duration: number, keyframes: CameraKeyframe[], onProgress: (p: number) => void) => Promise<Blob>;
 }
 
 const PersonGroup = ({ 
@@ -1114,7 +1114,7 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
       
       setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
     },
-    encodeOfflineVideo: async (width: number, height: number, fps: number, duration: number, kfs: CameraKeyframe[], onProgress: (p: number) => void, setTimeAsync?: (time: number) => Promise<void>) => {
+    encodeOfflineVideo: async (width: number, height: number, fps: number, duration: number, kfs: CameraKeyframe[], onProgress: (p: number) => void) => {
       if (!threeContext.current) throw new Error("No WebGL Context");
       const { gl, scene, camera } = threeContext.current;
 
@@ -1159,10 +1159,6 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
       const totalFrames = Math.ceil(duration * fps);
       for(let f = 0; f < totalFrames; f++) {
           const time = (f / fps);
-          
-          if (setTimeAsync) {
-            await setTimeAsync(time);
-          }
           
           if (kfs && kfs.length > 0) {
               const sorted = [...kfs].sort((a, b) => a.time - b.time);

@@ -401,7 +401,7 @@ export interface ThreeDViewportRef {
   startRecording: (width: number, height: number) => void;
   stopRecording: () => void;
   encodeOfflineVideo?: (width: number, height: number, fps: number, duration: number, keyframes: CameraKeyframe[], onProgress: (p: number) => void) => Promise<Blob>;
-  exportSceneGLTF: (duration: number) => void;
+  exportSceneGLTF: (duration: number) => Promise<void>;
 }
 
 const PersonGroup = ({ 
@@ -1247,7 +1247,7 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
 
       return new Blob([muxer.target.buffer], { type: 'video/mp4' });
     },
-    exportSceneGLTF: (duration: number) => {
+    exportSceneGLTF: async (duration: number) => {
       if (!threeContext.current) return;
       const { scene, camera } = threeContext.current;
       
@@ -1281,32 +1281,29 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
       }
 
       const exporter = new GLTFExporter();
-      exporter.parse(
-        scene,
-        (gltf: any) => {
-          let output;
-          if (gltf instanceof ArrayBuffer) {
-            output = new Blob([gltf], { type: 'application/octet-stream' });
-          } else {
-            const data = JSON.stringify(gltf);
-            output = new Blob([data], { type: 'text/plain' });
-          }
-          
-          const url = URL.createObjectURL(output);
-          const link = document.createElement('a');
-          link.style.display = 'none';
-          link.href = url;
-          link.download = 'scene.glb';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-        },
-        (error) => {
-          console.error("Failed to export GLTF:", error);
-        },
-        { binary: true, animations: clips }
-      );
+      
+      try {
+        const gltf = await exporter.parseAsync(scene, { binary: true, animations: clips });
+        let output;
+        if (gltf instanceof ArrayBuffer) {
+          output = new Blob([gltf], { type: 'application/octet-stream' });
+        } else {
+          const data = JSON.stringify(gltf);
+          output = new Blob([data], { type: 'text/plain' });
+        }
+        
+        const url = URL.createObjectURL(output);
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = url;
+        link.download = 'scene.glb';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error("Failed to export GLTF:", error);
+      }
     }
   }));
 

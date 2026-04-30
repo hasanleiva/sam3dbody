@@ -29,7 +29,7 @@ interface AnalysisToolsProps {
   setCameraSettings: React.Dispatch<React.SetStateAction<import('../types').CameraSettings>>;
   onExportImage: (quality?: 'FHD' | '4K') => void;
   onExportVideo: (quality?: 'FHD' | '4K') => void;
-  onExportScene: () => void;
+  onExportScene: () => Promise<void>;
 }
 
 export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
@@ -65,6 +65,7 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
   const [xgValue, setXgValue] = useState<number | null>(null);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [exportQuality, setExportQuality] = useState<'FHD' | '4K'>('FHD');
+  const [isExportingScene, setIsExportingScene] = useState(false);
 
   useEffect(() => {
     if (activeTool === 'xg' && selectedPerson && selectedPerson.worldPos) {
@@ -204,14 +205,26 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
                 VIDEO (.MP4)
               </button>
               <button
-                onClick={() => {
-                  setIsExportMenuOpen(false);
-                  onExportScene();
+                disabled={isExportingScene}
+                onClick={async () => {
+                  setIsExportingScene(true);
+                  try {
+                    // Small delay to allow React to update the UI
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await onExportScene();
+                  } finally {
+                    setIsExportingScene(false);
+                    setIsExportMenuOpen(false);
+                  }
                 }}
-                className="flex-1 py-2 px-3 bg-[#0d0d0d] hover:bg-[#222] text-white text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                className={`flex-1 py-2 px-3 ${isExportingScene ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#0d0d0d] hover:bg-[#222]'} text-white text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-2`}
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2-1m2 1l-2 1m2-1v10l-2 1m2-11l-8-4m8 4l-2 1M4 7l2-1M4 7l2 1M4 7v10l2 1m-2-11l8-4m-8 4l2 1M12 21l-2-1m2 1l2-1m-2 1v-2.5"/></svg>
-                SCENE (.GLB)
+                {isExportingScene ? (
+                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2-1m2 1l-2 1m2-1v10l-2 1m2-11l-8-4m8 4l-2 1M4 7l2-1M4 7l2 1M4 7v10l2 1m-2-11l8-4m-8 4l2 1M12 21l-2-1m2 1l2-1m-2 1v-2.5"/></svg>
+                )}
+                {isExportingScene ? 'EXPORTING...' : 'SCENE (.GLB)'}
               </button>
             </div>
           </div>

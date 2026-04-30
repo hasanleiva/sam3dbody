@@ -11,6 +11,8 @@ import * as THREE from 'three';
 import { PLYLoader, FBXLoader, SkeletonUtils, GLTFExporter } from 'three-stdlib';
 import { useLoader, useThree, useFrame } from '@react-three/fiber';
 
+import { TextPlane } from './TextPlane';
+
 declare const cv: any;
 
 const getAnimationState = (time: number | undefined, start: number | undefined, end: number | undefined) => {
@@ -19,7 +21,7 @@ const getAnimationState = (time: number | undefined, start: number | undefined, 
   const FADE_DURATION = 0.5; // 500ms fade in/out
   
   if (start !== undefined && start !== null && time < start + FADE_DURATION) {
-    if (time < start) return { scale: 0, opacity: 0, visible: false, progress: 0, phase: 'before' as const };
+    if (time < start) return { scale: 0.0001, opacity: 0, visible: false, progress: 0, phase: 'before' as const };
     const progress = (time - start) / FADE_DURATION;
     return {
       scale: 0.8 + (0.2 * progress),
@@ -31,7 +33,7 @@ const getAnimationState = (time: number | undefined, start: number | undefined, 
   }
   
   if (end !== undefined && end !== null && time > end - FADE_DURATION) {
-    if (time > end) return { scale: 0, opacity: 0, visible: false, progress: 1, phase: 'after' as const };
+    if (time > end) return { scale: 0.0001, opacity: 0, visible: false, progress: 1, phase: 'after' as const };
     const progress = (end - time) / FADE_DURATION;
     return {
       scale: 0.8 + (0.2 * Math.max(0, progress)),
@@ -262,8 +264,12 @@ const PersonMesh = ({ url, color, colors, textureUrl, bodyModelUrl }: { url: str
       });
       
       // Try to copy vertex colors from the PLY mesh to the cloth mesh (only for default rig)
-      if (unrolledPly.attributes.color && !bodyModelUrl) {
-        clothSkinnedMesh.geometry.setAttribute('color', unrolledPly.attributes.color);
+      if (!bodyModelUrl) {
+        if (unrolledPly.attributes.color && clothSkinnedMesh.geometry.attributes.position.count === unrolledPly.attributes.color.count) {
+          clothSkinnedMesh.geometry.setAttribute('color', unrolledPly.attributes.color);
+        } else if (plyGeometry.attributes.color && clothSkinnedMesh.geometry.attributes.position.count === plyGeometry.attributes.color.count) {
+          clothSkinnedMesh.geometry.setAttribute('color', plyGeometry.attributes.color);
+        }
       }
       
       clothScene.traverse(child => {
@@ -552,12 +558,13 @@ const BillboardGroup = ({
     }
   }, [billboard.url]);
 
-  if (!texture || !anim.visible) return null;
+  if (!texture) return null;
 
   return (
     <>
       <group 
         ref={setTarget}
+        name={`billboard_${billboard.id}`}
         position={billboard.position}
         rotation={billboard.rotation || [0, 0, 0]}
         scale={[anim.scale, anim.scale, anim.scale]}
@@ -760,15 +767,16 @@ const ArcArrow: React.FC<{ start: [number, number, number], end: [number, number
         <meshStandardMaterial color={color} opacity={(isActive ? 1 : 0.8) * opacity} transparent side={THREE.DoubleSide} />
       </mesh>
 
-      {text && opacity > 0.05 && (
-        <Html position={[curve.getPoint(0.5).x, curve.getPoint(0.5).y + 0.5, curve.getPoint(0.5).z]} center zIndexRange={[100, 0]}>
-          <div 
-            className="px-2 py-1 bg-white/10 backdrop-blur-sm rounded shadow-sm font-bold text-xs whitespace-nowrap pointer-events-none"
-            style={{ color: textColor || color, textShadow: '0 1px 2px rgba(0,0,0,0.5)', opacity }}
-          >
-            {text}
-          </div>
-        </Html>
+      {text && (
+        <TextPlane 
+            position={[curve.getPoint(0.5).x, curve.getPoint(0.5).y + 0.5, curve.getPoint(0.5).z]} 
+            text={text}
+            color={textColor || color}
+            fontSize={50}
+            rotation={[-Math.PI / 2 + Math.PI / 6, 0, 0]}
+            scale={[1, 1, 1]}
+            opacity={opacity}
+        />
       )}
     </group>
   );
@@ -1280,10 +1288,98 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
         clips.push(clip);
       }
 
+      const elementsTracks: THREE.KeyframeTrack[] = [];
+      const createVisibilityScaleTrack = (nodeName: string, startTime?: number, endTime?: number) => {
+         const tStart = Math.max(0, startTime ?? 0);
+         const tEnd = Math.min(duration, endTime ?? duration);
+         
+         if (tStart >= tEnd) return null; // Invalid duration
+
+         const times = [0];
+         const values = [0.0001, 0.0001, 0.0001];
+
+         if (tStart > 0) {
+             times.push(tStart);
+             values.push(0.0001, 0.0001, 0.0001);
+         }
+
+         const FADE = 0.5;
+         const inMid = Math.min(tStart + FADE, tStart + (tEnd - tStart) / 2);
+         const outMid = Math.max(tEnd - FADE, tStart + (tEnd - tStart) / 2);
+
+         times.push(inMid);
+         values.push(1, 1, 1);
+
+         if (outMid > inMid) {
+             times.push(outMid);
+             values.push(1, 1, 1);
+         }
+
+         times.push(tEnd);
+         values.push(0.0001, 0.0001, 0.0001);
+
+         if (tEnd < duration) {
+             times.push(duration);
+             values.push(0.0001, 0.0001, 0.0001);
+         }
+
+         // Ensure monotonically increasing times to avoid warnings
+         const finalTimes = [times[0]];
+         for (let i = 1; i < times.length; i++) {
+            finalTimes.push(Math.max(finalTimes[i-1] + 0.001, times[i]));
+         }
+
+         return new THREE.VectorKeyframeTrack(`${nodeName}.scale`, finalTimes, values);
+      };
+
+      if (billboards) {
+          billboards.forEach(b => {
+              const track = createVisibilityScaleTrack(`billboard_${b.id}`, b.startTime, b.endTime);
+              if (track) elementsTracks.push(track);
+          });
+      }
+      
+      if (measurements) {
+          measurements.forEach(m => {
+              const track = createVisibilityScaleTrack(`measurement_${m.id}`, m.startTime, m.endTime);
+              if (track) elementsTracks.push(track);
+          });
+      }
+      
+      if (elementsTracks.length > 0) {
+          clips.push(new THREE.AnimationClip('ElementsAnimation', duration, elementsTracks));
+      }
+
       const exporter = new GLTFExporter();
+      const originalOpacities = new Map<THREE.Material, number>();
+      
+      scene.traverse(node => {
+          if (node.name.startsWith('measurement_') || node.name.startsWith('billboard_')) {
+              node.traverse(child => {
+                  const mesh = child as THREE.Mesh;
+                  if (mesh.material) {
+                      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                      materials.forEach(mat => {
+                          if (mat.transparent && mat.opacity < 1 && !originalOpacities.has(mat)) {
+                              originalOpacities.set(mat, mat.opacity);
+                              mat.opacity = 1;
+                              if (mat.opacity === 0) mat.transparent = false; // Prevent completely invisible logic if engine optimizes it
+                          }
+                      });
+                  }
+              });
+          }
+      });
       
       try {
         const gltf = await exporter.parseAsync(scene, { binary: true, animations: clips });
+        
+        // Restore opacities
+        for (const [mat, op] of Array.from(originalOpacities.entries())) {
+            mat.opacity = op;
+            mat.transparent = true;
+        }
+
         let output;
         if (gltf instanceof ArrayBuffer) {
           output = new Blob([gltf], { type: 'application/octet-stream' });
@@ -1581,7 +1677,6 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
             if (m.points.length === 0) return null;
             
             const anim = getAnimationState(timelineTime, m.startTime, m.endTime);
-            if (!anim.visible) return null;
 
             const isActive = m.id === activeMeasurementId;
             const color = isActive ? "#10b981" : "#059669";
@@ -1594,7 +1689,7 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
               const drawProgress = isEntering ? anim.progress : 1;
               
               return (
-                <group key={m.id} scale={[arrowScale, arrowScale, arrowScale]}>
+                <group key={m.id} name={`measurement_${m.id}`} scale={[arrowScale, arrowScale, arrowScale]}>
                   {m.points.length === 1 && (
                     <mesh position={[m.points[0][0], 0.05, m.points[0][2]]}>
                       <sphereGeometry args={[0.3, 16, 16]} />
@@ -1618,48 +1713,46 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
             }
             
             return (
-              <group key={m.id} scale={[anim.scale, anim.scale, anim.scale]}>
+              <group key={m.id} name={`measurement_${m.id}`} scale={[anim.scale, anim.scale, anim.scale]}>
                 {m.points.map((point, i) => (
                   <mesh key={`dp-${m.id}-${i}`} position={[point[0], 0.05, point[2]]}>
                     <sphereGeometry args={[0.3, 16, 16]} />
                     <meshBasicMaterial color={m.color || color} transparent opacity={anim.opacity} />
                   </mesh>
                 ))}
-                {m.points.length === 2 && (
+                {m.points.length === 2 && (() => {
+                  const p1 = new THREE.Vector3(m.points[0][0], 0.05, m.points[0][2]);
+                  const p2 = new THREE.Vector3(m.points[1][0], 0.05, m.points[1][2]);
+                  const distance = p1.distanceTo(p2);
+                  const midPoint = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+                  const dir = new THREE.Vector3().subVectors(p2, p1).normalize();
+                  if (dir.lengthSq() < 0.001) dir.set(1, 0, 0);
+                  const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+                  
+                  return (
                   <group>
-                    <Line
-                      points={[
-                        [m.points[0][0], 0.05, m.points[0][2]],
-                        [m.points[1][0], 0.05, m.points[1][2]]
-                      ]}
-                      color={m.color || color}
-                      lineWidth={9}
-                      transparent
-                      opacity={isActive ? anim.opacity : 0.6 * anim.opacity}
-                    />
-                    <Text
+                    <mesh position={midPoint} quaternion={quaternion}>
+                      <cylinderGeometry args={[0.08, 0.08, distance, 8]} />
+                      <meshBasicMaterial color={m.color || color} transparent opacity={isActive ? anim.opacity : 0.6 * anim.opacity} />
+                    </mesh>
+                    <TextPlane
                       position={[
                         (m.points[0][0] + m.points[1][0]) / 2,
                         0.55,
                         (m.points[0][2] + m.points[1][2]) / 2
                       ]}
                       color={m.textColor || m.color || "#ef4444"}
-                      fontSize={1.5}
-                      anchorX="center"
-                      anchorY="middle"
+                      fontSize={75}
                       rotation={[-Math.PI / 2, 0, 0]}
-                      outlineWidth={0.1}
-                      outlineColor="#000000"
-                      fillOpacity={anim.opacity}
-                      outlineOpacity={anim.opacity}
-                    >
-                      {m.text || `${Math.sqrt(
+                      scale={[1, 1, 1]}
+                      opacity={anim.opacity}
+                      text={m.text || `${Math.sqrt(
                         Math.pow(m.points[0][0] - m.points[1][0], 2) + 
                         Math.pow(m.points[0][2] - m.points[1][2], 2)
                       ).toFixed(1)}m`}
-                    </Text>
+                    />
                   </group>
-                )}
+                )})()}
               </group>
             );
           })}

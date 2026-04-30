@@ -8,7 +8,7 @@ import { HumanModel } from './HumanModel';
 import { DetectedPerson, CalibrationPoint, DistanceMeasurement, BillboardData, CameraSettings, CameraKeyframe } from '../types';
 import { PITCH_LINES } from '../utils/homography';
 import * as THREE from 'three';
-import { PLYLoader, FBXLoader, SkeletonUtils } from 'three-stdlib';
+import { PLYLoader, FBXLoader, SkeletonUtils, GLTFExporter } from 'three-stdlib';
 import { useLoader, useThree, useFrame } from '@react-three/fiber';
 
 declare const cv: any;
@@ -401,6 +401,7 @@ export interface ThreeDViewportRef {
   startRecording: (width: number, height: number) => void;
   stopRecording: () => void;
   encodeOfflineVideo?: (width: number, height: number, fps: number, duration: number, keyframes: CameraKeyframe[], onProgress: (p: number) => void) => Promise<Blob>;
+  exportSceneGLTF: (duration: number) => void;
 }
 
 const PersonGroup = ({ 
@@ -1245,6 +1246,67 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
       }
 
       return new Blob([muxer.target.buffer], { type: 'video/mp4' });
+    },
+    exportSceneGLTF: (duration: number) => {
+      if (!threeContext.current) return;
+      const { scene, camera } = threeContext.current;
+      
+      const clips: THREE.AnimationClip[] = [];
+      
+      // Ensure camera is part of the exported scene and has a predictable name
+      scene.add(camera);
+      camera.name = "MainCamera";
+      
+      if (keyframes && keyframes.length > 0) {
+        const sorted = [...keyframes].sort((a, b) => a.time - b.time);
+        const times = sorted.map(k => k.time);
+        
+        const positions: number[] = [];
+        const quaternions: number[] = [];
+        
+        const dummyCam = new THREE.PerspectiveCamera();
+        
+        for (const k of sorted) {
+           positions.push(...k.position);
+           dummyCam.position.set(k.position[0], k.position[1], k.position[2]);
+           dummyCam.lookAt(new THREE.Vector3(...k.target));
+           quaternions.push(dummyCam.quaternion.x, dummyCam.quaternion.y, dummyCam.quaternion.z, dummyCam.quaternion.w);
+        }
+        
+        const posTrack = new THREE.VectorKeyframeTrack('MainCamera.position', times, positions);
+        const quatTrack = new THREE.QuaternionKeyframeTrack('MainCamera.quaternion', times, quaternions);
+        
+        const clip = new THREE.AnimationClip('CameraAnimation', duration, [posTrack, quatTrack]);
+        clips.push(clip);
+      }
+
+      const exporter = new GLTFExporter();
+      exporter.parse(
+        scene,
+        (gltf: any) => {
+          let output;
+          if (gltf instanceof ArrayBuffer) {
+            output = new Blob([gltf], { type: 'application/octet-stream' });
+          } else {
+            const data = JSON.stringify(gltf);
+            output = new Blob([data], { type: 'text/plain' });
+          }
+          
+          const url = URL.createObjectURL(output);
+          const link = document.createElement('a');
+          link.style.display = 'none';
+          link.href = url;
+          link.download = 'scene.glb';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        },
+        (error) => {
+          console.error("Failed to export GLTF:", error);
+        },
+        { binary: true, animations: clips }
+      );
     }
   }));
 

@@ -29,6 +29,7 @@ interface AnalysisToolsProps {
   setCameraSettings: React.Dispatch<React.SetStateAction<import('../types').CameraSettings>>;
   onExportImage: (quality?: 'FHD' | '4K') => void;
   onExportVideo: (quality?: 'FHD' | '4K') => void;
+  onExportScene: () => void;
 }
 
 export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
@@ -58,7 +59,8 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
   cameraSettings,
   setCameraSettings,
   onExportImage,
-  onExportVideo
+  onExportVideo,
+  onExportScene
 }) => {
   const [xgValue, setXgValue] = useState<number | null>(null);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
@@ -200,6 +202,16 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                 VIDEO (.MP4)
+              </button>
+              <button
+                onClick={() => {
+                  setIsExportMenuOpen(false);
+                  onExportScene();
+                }}
+                className="flex-1 py-2 px-3 bg-[#0d0d0d] hover:bg-[#222] text-white text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2-1m2 1l-2 1m2-1v10l-2 1m2-11l-8-4m8 4l-2 1M4 7l2-1M4 7l2 1M4 7v10l2 1m-2-11l8-4m-8 4l2 1M12 21l-2-1m2 1l2-1m-2 1v-2.5"/></svg>
+                SCENE (.GLB)
               </button>
             </div>
           </div>

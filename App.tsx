@@ -603,6 +603,7 @@ const AppContent: React.FC = () => {
               setCameraSettings={setCameraSettings}
               onExportImage={handleExportImage}
               onExportVideo={handleExportVideo}
+              onExportScene={() => viewportRef.current?.exportSceneGLTF(timelineDuration)}
             />
           ) : (
             <>

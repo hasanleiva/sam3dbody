@@ -254,8 +254,18 @@ app.get("/api/textures", async (req: any, res: any) => {
     const textures = (response.Contents || [])
       .filter((obj) => obj.Key && /\.(png|jpe?g|svg|webp)$/i.test(obj.Key))
       .map((obj) => {
-        const fileName = obj.Key!.split('/').pop();
-        return { name: fileName, path: `${r2Base}/${obj.Key}` };
+        const parts = obj.Key!.split('/');
+        const fileName = parts.pop();
+        
+        let team = 'System';
+        if (parts.length > 1) {
+          const idx = parts.indexOf('textures');
+          if (idx !== -1 && idx + 1 < parts.length) {
+            team = parts[idx + 1];
+          }
+        }
+        
+        return { name: fileName, path: `${r2Base}/${obj.Key}`, team };
       });
     return res.json({ textures });
   } catch (e) {

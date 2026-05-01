@@ -10,10 +10,8 @@ interface SegmentStripProps {
 }
 
 export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, onSelect, onUpdatePerson }) => {
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number, left: number } | null>(null);
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
-  const [availableTextures, setAvailableTextures] = useState<{name: string; path: string}[]>([]);
+  const [availableTextures, setAvailableTextures] = useState<{name: string; path: string; team?: string}[]>([]);
   const [availableModels, setAvailableModels] = useState<{name: string; path: string; team: string; league: string}[]>([]);
   const [personTeamFilters, setPersonTeamFilters] = useState<Record<string, string>>({});
   const [isModelsModalOpen, setIsModelsModalOpen] = useState(false);
@@ -37,8 +35,8 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
         console.warn("Failed to fetch textures from API", err);
         const R2_BASE = import.meta.env.VITE_R2_STORAGE_URL || '';
         setAvailableTextures([
-          { name: 'Red Pattern', path: R2_BASE ? `${R2_BASE}/textures/red_pattern.png` : '/textures/red_pattern.png' },
-          { name: 'Blue Stripes', path: R2_BASE ? `${R2_BASE}/textures/blue_stripes.png` : '/textures/blue_stripes.png' },
+          { name: 'Red Pattern', path: R2_BASE ? `${R2_BASE}/textures/red_pattern.png` : '/textures/red_pattern.png', team: 'System' },
+          { name: 'Blue Stripes', path: R2_BASE ? `${R2_BASE}/textures/blue_stripes.png` : '/textures/blue_stripes.png', team: 'System' },
         ]);
       });
 
@@ -65,40 +63,6 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
         ]);
       });
   }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setOpenMenuId(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    
-    const handleScroll = () => {
-      if (openMenuId) setOpenMenuId(null);
-    };
-    window.addEventListener('scroll', handleScroll, true);
-    
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('scroll', handleScroll, true);
-    };
-  }, [openMenuId]);
-
-  const handleJerseyClick = (e: React.MouseEvent<HTMLButtonElement>, personId: string) => {
-    e.stopPropagation();
-    if (openMenuId === personId) {
-      setOpenMenuId(null);
-      return;
-    }
-    
-    const rect = e.currentTarget.getBoundingClientRect();
-    setMenuPos({
-      top: rect.bottom + 8,
-      left: rect.left + rect.width / 2
-    });
-    setOpenMenuId(personId);
-  };
 
   const handleNameChange = (personId: string, newName: string) => {
     if (onUpdatePerson) {
@@ -191,61 +155,8 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
               )}
             </button>
           </div>
-          
-          {selectedId === person.id && (
-            <button
-              onClick={(e) => handleJerseyClick(e, person.id)}
-              className="text-[10px] font-bold uppercase tracking-wider bg-[#f5f5f5] hover:bg-[#eee] px-2 py-1 rounded border border-[#ddd] text-[#666] transition-colors"
-            >
-              Jersey
-            </button>
-          )}
         </div>
       ))}
-      
-      {openMenuId && menuPos && (
-        <div 
-          ref={menuRef}
-          className="fixed bg-white border border-[#eee] shadow-xl rounded-lg p-3 z-50 w-56 flex flex-col gap-3 max-h-[60vh] overflow-y-auto no-scrollbar"
-          style={{ 
-            top: `${menuPos.top}px`, 
-            left: `${menuPos.left}px`,
-            transform: 'translateX(-50%)'
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {(() => {
-            const person = people.find(p => p.id === openMenuId);
-            if (!person) return null;
-            return (
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold uppercase text-[#666]">TEXTURE</span>
-                <div className="flex flex-col gap-1">
-                  <button
-                    onClick={() => onUpdatePerson && onUpdatePerson(person.id, { textureUrl: undefined })}
-                    className={`text-left px-2 py-1 text-xs rounded transition-colors ${!person.textureUrl ? 'bg-[#FC3434] text-white' : 'hover:bg-[#f5f5f5] text-[#333]'}`}
-                  >
-                    Default (No Texture)
-                  </button>
-                  {availableTextures.map(texture => (
-                    <button
-                      key={texture.path}
-                      onClick={() => onUpdatePerson && onUpdatePerson(person.id, { textureUrl: texture.path })}
-                      className={`text-left px-2 py-1 text-xs rounded transition-colors truncate ${person.textureUrl === texture.path ? 'bg-[#FC3434] text-white' : 'hover:bg-[#f5f5f5] text-[#333]'}`}
-                      title={texture.name}
-                    >
-                      {texture.name}
-                    </button>
-                  ))}
-                  {availableTextures.length === 0 && (
-                    <span className="text-xs text-gray-400 px-2">No textures found...</span>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      )}
 
       {people.length === 0 && (
         <div className="flex gap-3">
@@ -267,22 +178,27 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
             <div className="p-4 overflow-y-auto flex-1 flex flex-col gap-4">
               {people.map(person => {
                 const currentModel = availableModels.find(m => m.path === person.bodyModelUrl);
+                const currentTexture = availableTextures.find(t => t.path === person.textureUrl);
                 const selectedTeam = personTeamFilters[person.id] !== undefined 
                     ? personTeamFilters[person.id] 
-                    : (currentModel?.team && currentModel.team !== 'Unknown Team' && currentModel.team !== 'System' ? currentModel.team : '');
+                    : (currentModel?.team && currentModel.team !== 'Unknown Team' && currentModel.team !== 'System' ? currentModel.team : (
+                        currentTexture?.team && currentTexture.team !== 'Unknown Team' && currentTexture.team !== 'System' ? currentTexture.team : ''
+                    ));
                 
-                const teamOptions = Array.from(new Set(
-                    availableModels
-                        .map(m => m.team)
-                        .filter(team => team && team !== 'Unknown Team' && team !== 'System')
-                )).sort();
+                const teamOptions = Array.from(new Set([
+                    ...availableModels.map(m => m.team).filter(team => team && team !== 'Unknown Team' && team !== 'System'),
+                    ...availableTextures.map(t => t.team || '').filter(team => team && team !== 'Unknown Team' && team !== 'System')
+                ])).sort();
                 
                 const modelsForTeam = availableModels.filter(m => m.team === selectedTeam);
                 const visibleModels = selectedTeam ? modelsForTeam : availableModels.filter(m => m.team !== 'Unknown Team' && m.team !== 'System');
 
+                const texturesForTeam = availableTextures.filter(t => t.team === selectedTeam);
+                const visibleTextures = selectedTeam ? texturesForTeam : availableTextures.filter(t => t.team !== 'Unknown Team' && t.team !== 'System');
+
                 return (
-                  <div key={person.id} className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#f5f5f5] pb-3 last:border-0 last:pb-0 gap-3">
-                    <div className="flex items-center gap-3">
+                  <div key={person.id} className="flex flex-col sm:flex-row sm:items-start justify-between border-b border-[#f5f5f5] pb-4 last:border-0 last:pb-0 gap-3">
+                    <div className="flex items-center gap-3 mt-1">
                       <img 
                         src={person.thumbnail?.startsWith('http') ? `${window.location.origin}/api/proxy-image?url=${encodeURIComponent(person.thumbnail)}` : person.thumbnail} 
                         alt="" 
@@ -293,23 +209,26 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
                         <span className="text-[10px] text-[#999] truncate">
                           {currentModel?.name || 'Default Body'}
                         </span>
+                        <span className="text-[10px] text-[#999] truncate">
+                          {currentTexture?.name || 'Default Jersey'}
+                        </span>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 sm:items-end w-full sm:w-auto">
                       <select
-                        className="text-sm border border-[#eee] rounded-md px-2 py-1 outline-none focus:border-[#FC3434] bg-white cursor-pointer w-32 max-w-[120px] text-ellipsis"
+                        className="text-xs font-medium border border-[#eee] rounded-md px-2 py-1.5 outline-none focus:border-[#FC3434] bg-[#f9f9f9] hover:bg-[#f5f5f5] cursor-pointer w-full sm:w-48 text-ellipsis transition-colors"
                         value={selectedTeam}
                         onChange={(e) => {
                           setPersonTeamFilters(prev => ({ ...prev, [person.id]: e.target.value }));
                         }}
                       >
-                        <option value="">All Teams</option>
+                        <option value="">All Teams (Filter)</option>
                         {teamOptions.map(team => (
                           <option key={team} value={team}>{team}</option>
                         ))}
                       </select>
                       <select
-                        className="text-sm border border-[#eee] rounded-md px-2 py-1 outline-none focus:border-[#FC3434] bg-white cursor-pointer w-40 max-w-[160px] text-ellipsis"
+                        className="text-sm border border-[#eee] rounded-md px-2 py-1.5 outline-none focus:border-[#FC3434] bg-white cursor-pointer w-full sm:w-48 text-ellipsis transition-colors"
                         value={person.bodyModelUrl || ''}
                         onChange={(e) => {
                           if (onUpdatePerson) {
@@ -321,6 +240,22 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
                         {visibleModels.map(model => (
                           <option key={model.path} value={model.path}>
                             {!selectedTeam && model.team && model.team !== 'System' ? `${model.team} - ` : ''}{model.name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        className="text-sm border border-[#eee] rounded-md px-2 py-1.5 outline-none focus:border-[#FC3434] bg-white cursor-pointer w-full sm:w-48 text-ellipsis transition-colors"
+                        value={person.textureUrl || ''}
+                        onChange={(e) => {
+                          if (onUpdatePerson) {
+                            onUpdatePerson(person.id, { textureUrl: e.target.value || undefined });
+                          }
+                        }}
+                      >
+                        <option value="">Default Jersey</option>
+                        {visibleTextures.map(texture => (
+                          <option key={texture.path} value={texture.path}>
+                            {!selectedTeam && texture.team && texture.team !== 'System' ? `${texture.team} - ` : ''}{texture.name}
                           </option>
                         ))}
                       </select>

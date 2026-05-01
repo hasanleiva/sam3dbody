@@ -1,6 +1,6 @@
 import React, { Suspense, useMemo, useCallback, useRef, useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress, Line, Text, TransformControls, Html } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Float, useProgress, Line, Text, TransformControls, Html, Billboard } from '@react-three/drei';
 import { EffectComposer, Bloom, ChromaticAberration, Noise, Vignette, N8AO, DepthOfField } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 import { Settings2 } from 'lucide-react';
@@ -11,8 +11,6 @@ import * as THREE from 'three';
 import { PLYLoader, FBXLoader, SkeletonUtils, GLTFExporter } from 'three-stdlib';
 import { useLoader, useThree, useFrame } from '@react-three/fiber';
 
-import { TextPlane } from './TextPlane';
-
 declare const cv: any;
 
 const getAnimationState = (time: number | undefined, start: number | undefined, end: number | undefined) => {
@@ -21,7 +19,7 @@ const getAnimationState = (time: number | undefined, start: number | undefined, 
   const FADE_DURATION = 0.5; // 500ms fade in/out
   
   if (start !== undefined && start !== null && time < start + FADE_DURATION) {
-    if (time < start) return { scale: 0.0001, opacity: 0, visible: false, progress: 0, phase: 'before' as const };
+    if (time < start) return { scale: 0, opacity: 0, visible: false, progress: 0, phase: 'before' as const };
     const progress = (time - start) / FADE_DURATION;
     return {
       scale: 0.8 + (0.2 * progress),
@@ -33,7 +31,7 @@ const getAnimationState = (time: number | undefined, start: number | undefined, 
   }
   
   if (end !== undefined && end !== null && time > end - FADE_DURATION) {
-    if (time > end) return { scale: 0.0001, opacity: 0, visible: false, progress: 1, phase: 'after' as const };
+    if (time > end) return { scale: 0, opacity: 0, visible: false, progress: 1, phase: 'after' as const };
     const progress = (end - time) / FADE_DURATION;
     return {
       scale: 0.8 + (0.2 * Math.max(0, progress)),
@@ -264,12 +262,8 @@ const PersonMesh = ({ url, color, colors, textureUrl, bodyModelUrl }: { url: str
       });
       
       // Try to copy vertex colors from the PLY mesh to the cloth mesh (only for default rig)
-      if (!bodyModelUrl) {
-        if (unrolledPly.attributes.color && clothSkinnedMesh.geometry.attributes.position.count === unrolledPly.attributes.color.count) {
-          clothSkinnedMesh.geometry.setAttribute('color', unrolledPly.attributes.color);
-        } else if (plyGeometry.attributes.color && clothSkinnedMesh.geometry.attributes.position.count === plyGeometry.attributes.color.count) {
-          clothSkinnedMesh.geometry.setAttribute('color', plyGeometry.attributes.color);
-        }
+      if (unrolledPly.attributes.color && !bodyModelUrl) {
+        clothSkinnedMesh.geometry.setAttribute('color', unrolledPly.attributes.color);
       }
       
       clothScene.traverse(child => {
@@ -486,11 +480,19 @@ const PersonGroup = ({
 
         {/* Player Name Label */}
         {person.showName && (
-          <Html position={[0, 2.2, 0]} center zIndexRange={[100, 0]}>
-            <div className="bg-white px-2 py-1 rounded-md shadow-md border border-gray-200 text-black text-xs font-bold whitespace-nowrap pointer-events-none">
+          <Billboard position={[0, 2.2, 0]}>
+            <Text
+              color="#ffffff"
+              fontSize={0.25}
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={0.03}
+              outlineColor="#000000"
+              fontWeight="bold"
+            >
               {person.name}
-            </div>
-          </Html>
+            </Text>
+          </Billboard>
         )}
       </group>
 
@@ -558,7 +560,7 @@ const BillboardGroup = ({
     }
   }, [billboard.url]);
 
-  if (!texture) return null;
+  if (!texture || !anim.visible) return null;
 
   return (
     <>
@@ -767,16 +769,22 @@ const ArcArrow: React.FC<{ start: [number, number, number], end: [number, number
         <meshStandardMaterial color={color} opacity={(isActive ? 1 : 0.8) * opacity} transparent side={THREE.DoubleSide} />
       </mesh>
 
-      {text && (
-        <TextPlane 
-            position={[curve.getPoint(0.5).x, curve.getPoint(0.5).y + 0.5, curve.getPoint(0.5).z]} 
-            text={text}
+      {text && opacity > 0.05 && (
+        <Billboard position={[curve.getPoint(0.5).x, curve.getPoint(0.5).y + 0.5, curve.getPoint(0.5).z]}>
+          <Text
             color={textColor || color}
-            fontSize={50}
-            rotation={[-Math.PI / 2 + Math.PI / 6, 0, 0]}
-            scale={[1, 1, 1]}
-            opacity={opacity}
-        />
+            fontSize={0.8}
+            anchorX="center"
+            anchorY="middle"
+            outlineWidth={0.06}
+            outlineColor="#000000"
+            fontWeight="bold"
+            fillOpacity={opacity}
+            outlineOpacity={opacity}
+          >
+            {text}
+          </Text>
+        </Billboard>
       )}
     </group>
   );
@@ -855,107 +863,162 @@ const GoalNet: React.FC<{ position: [number, number, number], rotation: [number,
 };
 
 const Pitch3D: React.FC<{ onClick?: (point: [number, number, number]) => void }> = ({ onClick }) => {
-  const pitchTexture = useMemo(() => {
+  const textures = useMemo(() => {
+    // Increase resolution for better quality
+    const width = 4096;
+    const height = Math.round(width * (88 / 125));
+
     const canvas = document.createElement('canvas');
-    canvas.width = 2048;
-    // We are extending the dimensions from 105x68 to 125x88.
-    // 2048 * (88 / 125) = ~1441.79
-    canvas.height = 1442; 
+    canvas.width = width;
+    canvas.height = height; 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
+
+    const normalCanvas = document.createElement('canvas');
+    normalCanvas.width = width;
+    normalCanvas.height = height;
+    const nCtx = normalCanvas.getContext('2d');
+
+    const roughCanvas = document.createElement('canvas');
+    roughCanvas.width = width;
+    roughCanvas.height = height;
+    const rCtx = roughCanvas.getContext('2d');
+
+    if (!ctx || !nCtx || !rCtx) return { pitchTexture: null, normalTexture: null, roughTexture: null };
+
+    // Fill normal map flat base (128, 128, 255)
+    nCtx.fillStyle = '#8080ff';
+    nCtx.fillRect(0, 0, width, height);
+
+    // Fill roughness base
+    rCtx.fillStyle = '#cccccc'; // High roughness base
+    rCtx.fillRect(0, 0, width, height);
 
     // Grass Base (Realistic green)
-    ctx.fillStyle = '#4f7b2c';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#4a7c29';
+    ctx.fillRect(0, 0, width, height);
 
-    // Mown Grass Stripes. Original had 18 for 105m. We are 125m now.
-    // 18 * (125 / 105) ~ 21.4. Let's use 22.
+    // Mown Grass Stripes
     const stripeCount = 22;
-    const stripeWidth = canvas.width / stripeCount;
+    const stripeWidth = width / stripeCount;
     for (let i = 0; i < stripeCount; i++) {
       if (i % 2 === 0) {
-        ctx.fillStyle = '#446c24';
-        ctx.fillRect(i * stripeWidth, 0, stripeWidth, canvas.height);
+        ctx.fillStyle = '#416d23';
+        ctx.fillRect(i * stripeWidth, 0, stripeWidth, height);
+        
+        // Slight roughness alteration for stripes
+        rCtx.fillStyle = '#bbbbbb';
+        rCtx.fillRect(i * stripeWidth, 0, stripeWidth, height);
       }
     }
 
     // Add realistic noise layer
     const noiseCanvas = document.createElement('canvas');
-    noiseCanvas.width = 256;
-    noiseCanvas.height = 256;
-    const nCtx = noiseCanvas.getContext('2d');
-    if (nCtx) {
-        const idata = nCtx.createImageData(256, 256);
+    noiseCanvas.width = 512;
+    noiseCanvas.height = 512;
+    const noiseCtx = noiseCanvas.getContext('2d');
+
+    const normalNoiseCanvas = document.createElement('canvas');
+    normalNoiseCanvas.width = 512;
+    normalNoiseCanvas.height = 512;
+    const nNoiseCtx = normalNoiseCanvas.getContext('2d');
+
+    if (noiseCtx && nNoiseCtx) {
+        const idata = noiseCtx.createImageData(512, 512);
         const buf32 = new Uint32Array(idata.data.buffer);
+
+        const nIdata = nNoiseCtx.createImageData(512, 512);
+        const nBuf32 = new Uint32Array(nIdata.data.buffer);
+
         for (let i = 0; i < buf32.length; i++) {
            const isDark = Math.random() > 0.5;
-           const alpha = (Math.random() * 25 | 0); // 0 to 25 opacity
+           const alpha = (Math.random() * 35 | 0); 
            if (isDark) {
-               // Black noise
                buf32[i] = (alpha << 24) | (0 << 16) | (0 << 8) | 0; 
            } else {
-               // Yellow/White bright noise
-               buf32[i] = ((alpha) << 24) | (200 << 16) | (230 << 8) | 200; 
+               buf32[i] = ((alpha) << 24) | (180 << 16) | (240 << 8) | 200; 
            }
+
+           // Normal map noise (random slight bumpiness, x and y perturbed)
+           const nx = 128 + (Math.random() * 80 - 40) | 0;
+           const ny = 128 + (Math.random() * 80 - 40) | 0;
+           const nz = 255;
+           nBuf32[i] = (255 << 24) | (nz << 16) | (ny << 8) | nx; // little-endian ABGR
         }
-        nCtx.putImageData(idata, 0, 0);
+        noiseCtx.putImageData(idata, 0, 0);
+        nNoiseCtx.putImageData(nIdata, 0, 0);
         
         ctx.fillStyle = ctx.createPattern(noiseCanvas, 'repeat')!;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, width, height);
+
+        nCtx.globalAlpha = 0.6; // Blend normal noise with flat base
+        nCtx.fillStyle = nCtx.createPattern(normalNoiseCanvas, 'repeat')!;
+        nCtx.fillRect(0, 0, width, height);
+        nCtx.globalAlpha = 1.0;
     }
 
     // Scaling factors from world (125x88) to canvas
-    const scaleX = canvas.width / 125;
-    const scaleY = canvas.height / 88;
+    const scaleX = width / 125;
+    const scaleY = height / 88;
 
-    // Pitch layout is heavily offset 10m inwards to stay 105x68 in the middle
     const offsetX = 10 * scaleX;
     const offsetY = 10 * scaleY;
 
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'; // Slightly softer white
-    ctx.lineWidth = 4;
-    ctx.lineCap = 'round';
+    // Drawing helpers
+    const drawPitchLines = (c: CanvasRenderingContext2D, color: string, lWidth: number) => {
+      c.strokeStyle = color;
+      c.fillStyle = color;
+      c.lineWidth = lWidth;
+      c.lineCap = 'round';
 
-    // Draw lines from PITCH_LINES
-    PITCH_LINES.forEach(line => {
-      ctx.beginPath();
-      ctx.moveTo(offsetX + line[0][0] * scaleX, offsetY + line[0][1] * scaleY);
-      ctx.lineTo(offsetX + line[1][0] * scaleX, offsetY + line[1][1] * scaleY);
-      ctx.stroke();
-    });
+      PITCH_LINES.forEach(line => {
+        c.beginPath();
+        c.moveTo(offsetX + line[0][0] * scaleX, offsetY + line[0][1] * scaleY);
+        c.lineTo(offsetX + line[1][0] * scaleX, offsetY + line[1][1] * scaleY);
+        c.stroke();
+      });
 
-    // Center Circle
-    ctx.beginPath();
-    ctx.arc(offsetX + 52.5 * scaleX, offsetY + 34 * scaleY, 9.15 * scaleX, 0, Math.PI * 2);
-    ctx.stroke();
+      c.beginPath();
+      c.arc(offsetX + 52.5 * scaleX, offsetY + 34 * scaleY, 9.15 * scaleX, 0, Math.PI * 2);
+      c.stroke();
 
-    // Center Spot
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.beginPath();
-    ctx.arc(offsetX + 52.5 * scaleX, offsetY + 34 * scaleY, 0.4 * scaleX, 0, Math.PI * 2);
-    ctx.fill();
+      c.beginPath();
+      c.arc(offsetX + 52.5 * scaleX, offsetY + 34 * scaleY, 0.4 * scaleX, 0, Math.PI * 2);
+      c.fill();
 
-    // Penalty Spots
-    ctx.beginPath();
-    ctx.arc(offsetX + 11 * scaleX, offsetY + 34 * scaleY, 0.4 * scaleX, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(offsetX + (105 - 11) * scaleX, offsetY + 34 * scaleY, 0.4 * scaleX, 0, Math.PI * 2);
-    ctx.fill();
+      c.beginPath();
+      c.arc(offsetX + 11 * scaleX, offsetY + 34 * scaleY, 0.4 * scaleX, 0, Math.PI * 2);
+      c.fill();
 
-    // Penalty Arcs
-    // Left
-    ctx.beginPath();
-    ctx.arc(offsetX + 11 * scaleX, offsetY + 34 * scaleY, 9.15 * scaleX, -0.926, 0.926);
-    ctx.stroke();
-    // Right
-    ctx.beginPath();
-    ctx.arc(offsetX + (105 - 11) * scaleX, offsetY + 34 * scaleY, 9.15 * scaleX, Math.PI - 0.926, Math.PI + 0.926);
-    ctx.stroke();
+      c.beginPath();
+      c.arc(offsetX + (105 - 11) * scaleX, offsetY + 34 * scaleY, 0.4 * scaleX, 0, Math.PI * 2);
+      c.fill();
 
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.anisotropy = 16;
-    return texture;
+      c.beginPath();
+      c.arc(offsetX + 11 * scaleX, offsetY + 34 * scaleY, 9.15 * scaleX, -0.926, 0.926);
+      c.stroke();
+
+      c.beginPath();
+      c.arc(offsetX + (105 - 11) * scaleX, offsetY + 34 * scaleY, 9.15 * scaleX, Math.PI - 0.926, Math.PI + 0.926);
+      c.stroke();
+    };
+
+    // Albedo lines
+    drawPitchLines(ctx, 'rgba(255, 255, 255, 0.85)', 4.5);
+    // Smooth out normals for the lines so they look like paint, not bumpy
+    drawPitchLines(nCtx, '#8080ff', 5);
+    // Lower roughness for paint lines
+    drawPitchLines(rCtx, '#777777', 5);
+
+    const pitchTexture = new THREE.CanvasTexture(canvas);
+    pitchTexture.anisotropy = 16;
+    
+    const normalTexture = new THREE.CanvasTexture(normalCanvas);
+    normalTexture.anisotropy = 16;
+    
+    const roughTexture = new THREE.CanvasTexture(roughCanvas);
+    roughTexture.anisotropy = 16;
+
+    return { pitchTexture, normalTexture, roughTexture };
   }, []);
 
   return (
@@ -973,9 +1036,12 @@ const Pitch3D: React.FC<{ onClick?: (point: [number, number, number]) => void }>
       >
         <planeGeometry args={[125, 88]} />
         <meshStandardMaterial 
-          map={pitchTexture} 
-          roughness={0.8}
-          metalness={0.1}
+          map={textures.pitchTexture} 
+          normalMap={textures.normalTexture}
+          normalScale={new THREE.Vector2(1.2, 1.2)}
+          roughnessMap={textures.roughTexture}
+          roughness={0.9}
+          metalness={0.05}
         />
       </mesh>
 
@@ -1293,43 +1359,45 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
          const tStart = Math.max(0, startTime ?? 0);
          const tEnd = Math.min(duration, endTime ?? duration);
          
-         if (tStart >= tEnd) return null; // Invalid duration
-
-         const times = [0];
-         const values = [0.0001, 0.0001, 0.0001];
-
+         if (tStart <= 0 && tEnd >= duration) return null;
+         
+         const times: number[] = [0];
+         const values: number[] = [0, 0, 0];
+         
          if (tStart > 0) {
-             times.push(tStart);
-             values.push(0.0001, 0.0001, 0.0001);
+             times.push(Math.max(0.001, tStart - 0.001), tStart + 0.5);
+             values.push(0, 0, 0, 1, 1, 1);
+         } else {
+             values[0] = 1; values[1] = 1; values[2] = 1;
          }
-
-         const FADE = 0.5;
-         const inMid = Math.min(tStart + FADE, tStart + (tEnd - tStart) / 2);
-         const outMid = Math.max(tEnd - FADE, tStart + (tEnd - tStart) / 2);
-
-         times.push(inMid);
-         values.push(1, 1, 1);
-
-         if (outMid > inMid) {
-             times.push(outMid);
+         
+         if (tEnd < duration) {
+             const tEndStart = Math.max(times[times.length - 1] + 0.001, tEnd);
+             const tEndFinish = Math.min(duration, tEndStart + 0.5);
+             times.push(tEndStart, tEndFinish);
+             values.push(1, 1, 1, 0, 0, 0);
+             if (tEndFinish < duration) {
+                 times.push(duration);
+                 values.push(0, 0, 0);
+             }
+         } else {
+             times.push(duration);
              values.push(1, 1, 1);
          }
-
-         times.push(tEnd);
-         values.push(0.0001, 0.0001, 0.0001);
-
-         if (tEnd < duration) {
-             times.push(duration);
-             values.push(0.0001, 0.0001, 0.0001);
-         }
-
-         // Ensure monotonically increasing times to avoid warnings
-         const finalTimes = [times[0]];
-         for (let i = 1; i < times.length; i++) {
-            finalTimes.push(Math.max(finalTimes[i-1] + 0.001, times[i]));
-         }
-
-         return new THREE.VectorKeyframeTrack(`${nodeName}.scale`, finalTimes, values);
+         
+         // Ensure strictly ascending times
+         const deduplicatedTimes: number[] = [];
+         const deduplicatedValues: number[] = [];
+         times.forEach((t, i) => {
+             let validT = t;
+             if (i > 0 && validT <= deduplicatedTimes[i - 1]) {
+                 validT = deduplicatedTimes[i - 1] + 0.001;
+             }
+             deduplicatedTimes.push(validT);
+             deduplicatedValues.push(values[i * 3], values[i * 3 + 1], values[i * 3 + 2]);
+         });
+         
+         return new THREE.VectorKeyframeTrack(`${nodeName}.scale`, deduplicatedTimes, deduplicatedValues);
       };
 
       if (billboards) {
@@ -1351,35 +1419,9 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
       }
 
       const exporter = new GLTFExporter();
-      const originalOpacities = new Map<THREE.Material, number>();
-      
-      scene.traverse(node => {
-          if (node.name.startsWith('measurement_') || node.name.startsWith('billboard_')) {
-              node.traverse(child => {
-                  const mesh = child as THREE.Mesh;
-                  if (mesh.material) {
-                      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-                      materials.forEach(mat => {
-                          if (mat.transparent && mat.opacity < 1 && !originalOpacities.has(mat)) {
-                              originalOpacities.set(mat, mat.opacity);
-                              mat.opacity = 1;
-                              if (mat.opacity === 0) mat.transparent = false; // Prevent completely invisible logic if engine optimizes it
-                          }
-                      });
-                  }
-              });
-          }
-      });
       
       try {
         const gltf = await exporter.parseAsync(scene, { binary: true, animations: clips });
-        
-        // Restore opacities
-        for (const [mat, op] of Array.from(originalOpacities.entries())) {
-            mat.opacity = op;
-            mat.transparent = true;
-        }
-
         let output;
         if (gltf instanceof ArrayBuffer) {
           output = new Blob([gltf], { type: 'application/octet-stream' });
@@ -1677,6 +1719,7 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
             if (m.points.length === 0) return null;
             
             const anim = getAnimationState(timelineTime, m.startTime, m.endTime);
+            if (!anim.visible) return null;
 
             const isActive = m.id === activeMeasurementId;
             const color = isActive ? "#10b981" : "#059669";
@@ -1735,22 +1778,27 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
                       <cylinderGeometry args={[0.08, 0.08, distance, 8]} />
                       <meshBasicMaterial color={m.color || color} transparent opacity={isActive ? anim.opacity : 0.6 * anim.opacity} />
                     </mesh>
-                    <TextPlane
+                    <Text
                       position={[
                         (m.points[0][0] + m.points[1][0]) / 2,
                         0.55,
                         (m.points[0][2] + m.points[1][2]) / 2
                       ]}
                       color={m.textColor || m.color || "#ef4444"}
-                      fontSize={75}
+                      fontSize={1.5}
+                      anchorX="center"
+                      anchorY="middle"
                       rotation={[-Math.PI / 2, 0, 0]}
-                      scale={[1, 1, 1]}
-                      opacity={anim.opacity}
-                      text={m.text || `${Math.sqrt(
+                      outlineWidth={0.1}
+                      outlineColor="#000000"
+                      fillOpacity={anim.opacity}
+                      outlineOpacity={anim.opacity}
+                    >
+                      {m.text || `${Math.sqrt(
                         Math.pow(m.points[0][0] - m.points[1][0], 2) + 
                         Math.pow(m.points[0][2] - m.points[1][2], 2)
                       ).toFixed(1)}m`}
-                    />
+                    </Text>
                   </group>
                 )})()}
               </group>

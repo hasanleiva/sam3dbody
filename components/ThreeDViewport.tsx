@@ -104,11 +104,6 @@ const CameraAnimator = ({ cameraRef, controlsRef, keyframes, isPlayingCamera, ti
         cameraRef.current.updateProjectionMatrix();
         controlsRef.current.update();
       }
-    } else if (isCameraViewActive && cameraSettings && !isPlayingCamera) {
-      if (Math.abs(cameraRef.current.fov - cameraSettings.fov) > 0.1) {
-        cameraRef.current.fov = cameraSettings.fov;
-        cameraRef.current.updateProjectionMatrix();
-      }
     }
   });
   return null;
@@ -400,7 +395,7 @@ export interface ThreeDViewportRef {
   captureHighResFrame: (width: number, height: number) => HTMLCanvasElement | null;
   startRecording: (width: number, height: number) => void;
   stopRecording: () => void;
-  encodeOfflineVideo?: (width: number, height: number, fps: number, duration: number, keyframes: CameraKeyframe[], onProgress: (p: number) => void) => Promise<Blob>;
+  encodeOfflineVideo?: (width: number, height: number, fps: number, duration: number, keyframes: CameraKeyframe[], onProgress: (p: number) => void, onTimeUpdate?: (t: number) => Promise<void>) => Promise<Blob>;
   exportSceneGLTF: (duration: number) => Promise<void>;
 }
 
@@ -1189,7 +1184,7 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
       
       setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
     },
-    encodeOfflineVideo: async (width: number, height: number, fps: number, duration: number, kfs: CameraKeyframe[], onProgress: (p: number) => void) => {
+    encodeOfflineVideo: async (width: number, height: number, fps: number, duration: number, kfs: CameraKeyframe[], onProgress: (p: number) => void, onTimeUpdate?: (t: number) => Promise<void>) => {
       if (!threeContext.current) throw new Error("No WebGL Context");
       const { gl, scene, camera } = threeContext.current;
 
@@ -1273,6 +1268,10 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
                       cam.updateProjectionMatrix();
                   }
               }
+          }
+
+          if (onTimeUpdate) {
+             await onTimeUpdate(time);
           }
 
           if (composerRef.current) {

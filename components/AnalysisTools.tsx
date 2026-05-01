@@ -246,38 +246,6 @@ export const AnalysisTools: React.FC<AnalysisToolsProps> = ({
                 ))}
               </div>
             </div>
-            
-            <div>
-              <div className="flex justify-between mb-1">
-                <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest">Height Offset</label>
-                <span className="text-[10px] font-mono text-black/40">{cameraSettings.heightOffset.toFixed(1)}m</span>
-              </div>
-              <input 
-                type="range" 
-                min="-10" 
-                max="10" 
-                step="0.1" 
-                value={cameraSettings.heightOffset}
-                onChange={e => setCameraSettings(s => ({ ...s, heightOffset: parseFloat(e.target.value) }))}
-                className="w-full"
-              />
-            </div>
-
-            <div>
-              <div className="flex justify-between mb-1">
-                <label className="text-[10px] font-bold text-black/60 uppercase tracking-widest">Field of View (FOV)</label>
-                <span className="text-[10px] font-mono text-black/40">{cameraSettings.fov.toFixed(1)}°</span>
-              </div>
-              <input 
-                type="range" 
-                min="10" 
-                max="120" 
-                step="1" 
-                value={cameraSettings.fov}
-                onChange={e => setCameraSettings(s => ({ ...s, fov: parseFloat(e.target.value) }))}
-                className="w-full"
-              />
-            </div>
           </div>
         )}
         

@@ -69,8 +69,6 @@ export interface CameraKeyframe {
 
 export interface CameraSettings {
   aspectRatio: '16:9' | '1:1' | '9:16' | 'free';
-  heightOffset: number;
-  fov: number;
 }
 
 export interface AppState {

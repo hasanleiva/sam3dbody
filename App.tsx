@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { Header } from './components/Header';
 import { SegmentStrip } from './components/SegmentStrip';
 import { ThreeDViewport } from './components/ThreeDViewport';
@@ -47,9 +48,7 @@ const AppContent: React.FC = () => {
   const [overlayOpacity, setOverlayOpacity] = useState(0.5);
 
   const [cameraSettings, setCameraSettings] = useState<import('./types').CameraSettings>({
-    aspectRatio: 'free',
-    heightOffset: 0,
-    fov: 35
+    aspectRatio: 'free'
   });
   const [isCameraViewActive, setIsCameraViewActive] = useState(false);
   const [isCameraSettingsModalOpen, setIsCameraSettingsModalOpen] = useState(false);
@@ -516,8 +515,15 @@ const AppContent: React.FC = () => {
         timelineDuration,
         keyframes,
         (progress) => {
-          // Could dispatch to a state to show progress!
           console.log(`Exporting video: ${Math.round(progress * 100)}%`);
+          // Could dispatch to a state to show progress!
+        },
+        async (time) => {
+          flushSync(() => {
+            setTimelineTime(time);
+          });
+          // Wait to ensure R3F commit phase actually runs and updates ThreeJS objects
+          await new Promise(r => setTimeout(r, 30));
         }
       );
       
@@ -828,8 +834,18 @@ const AppContent: React.FC = () => {
 
             {/* 3D Viewport Panel */}
             <div className={`flex flex-col min-w-0 ${state.fullscreenView === 'image' ? 'hidden' : 'flex-1'}`}>
-              <div className="flex-1 overflow-hidden shadow-lg relative rounded-xl border border-[#eee]">
-                <ThreeDViewport 
+              <div className="flex-1 flex flex-col min-h-0 items-center justify-center bg-[#f2f2f2] rounded-xl border border-[#eee] overflow-hidden p-2">
+                <div 
+                  className={`flex-shrink-0 overflow-hidden shadow-lg relative bg-[#D7D7D7] rounded-lg ${cameraSettings.aspectRatio === 'free' ? 'w-full h-full' : ''}`}
+                  style={cameraSettings.aspectRatio !== 'free' ? {
+                    aspectRatio: cameraSettings.aspectRatio.replace(':', '/'),
+                    maxHeight: '100%',
+                    maxWidth: '100%',
+                    height: '100%', // this ensures it tries to grow to fit parent vertically
+                    width: 'auto'   // width is computed from height and aspect ratio
+                  } : {}}
+                >
+                  <ThreeDViewport 
                   selectedPerson={selectedPerson} 
                   allPeople={state.detectedPeople} 
                   homographyMatrix={state.homographyMatrix}
@@ -876,6 +892,7 @@ const AppContent: React.FC = () => {
                   isPlayingCamera={isPlayingCamera}
                   timelineTime={timelineTime}
                 />
+                </div>
               </div>
               {state.fullscreenView === '3d' && (
                 <div className="h-20 bg-white border border-[#eee] rounded-xl mt-4 shadow-sm flex flex-col justify-center px-4 gap-2 flex-shrink-0 relative">

@@ -56,18 +56,20 @@ export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose,
         imageUrl = data.url;
       }
 
+      const stateToSave = JSON.parse(JSON.stringify({
+        image: imageUrl,
+        imageDimensions: state.imageDimensions || null,
+        calibrationPoints: state.calibrationPoints || null,
+        homographyMatrix: state.homographyMatrix || null,
+        detectedPeople: state.detectedPeople || [],
+        customNodes: state.customNodes || [],
+        measurements: JSON.stringify(measurements)
+      }));
+
       await addDoc(collection(db, 'users', user.uid, 'scenes'), {
         name: sceneName,
         createdAt: serverTimestamp(),
-        state: {
-          image: imageUrl,
-          imageDimensions: state.imageDimensions,
-          calibrationPoints: state.calibrationPoints,
-          homographyMatrix: state.homographyMatrix,
-          detectedPeople: state.detectedPeople,
-          customNodes: state.customNodes,
-          measurements: JSON.stringify(measurements)
-        }
+        state: stateToSave
       });
       onClose();
     } catch (err: any) {

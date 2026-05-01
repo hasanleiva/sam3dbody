@@ -46,6 +46,7 @@ const AppContent: React.FC = () => {
   const [selectedBillboardId, setSelectedBillboardId] = useState<string | null>(null);
   const [overlayEnabled, setOverlayEnabled] = useState(false);
   const [overlayOpacity, setOverlayOpacity] = useState(0.5);
+  const [exportProgress, setExportProgress] = useState<number | null>(null);
 
   const [cameraSettings, setCameraSettings] = useState<import('./types').CameraSettings>({
     aspectRatio: 'free'
@@ -505,7 +506,7 @@ const AppContent: React.FC = () => {
     }
 
     try {
-      // In a real application, you'd show a loading overlay here using `onProgress`
+      setExportProgress(0);
       console.log(`Starting High Quality 60FPS Offline Render at ${targetWidth}x${targetHeight}...`);
       
       const blob = await viewportRef.current.encodeOfflineVideo(
@@ -515,8 +516,7 @@ const AppContent: React.FC = () => {
         timelineDuration,
         keyframes,
         (progress) => {
-          console.log(`Exporting video: ${Math.round(progress * 100)}%`);
-          // Could dispatch to a state to show progress!
+          setExportProgress(progress);
         },
         async (time) => {
           flushSync(() => {
@@ -535,6 +535,8 @@ const AppContent: React.FC = () => {
     } catch (err) {
       console.error(err);
       alert("Failed to export video. Please check the console for details.");
+    } finally {
+      setExportProgress(null);
     }
   };
 
@@ -836,7 +838,7 @@ const AppContent: React.FC = () => {
             <div className={`flex flex-col min-w-0 ${state.fullscreenView === 'image' ? 'hidden' : 'flex-1'}`}>
               <div className="flex-1 flex flex-col min-h-0 items-center justify-center bg-[#f2f2f2] rounded-xl border border-[#eee] overflow-hidden p-2">
                 <div 
-                  className={`flex-shrink-0 overflow-hidden shadow-lg relative bg-[#D7D7D7] rounded-lg ${cameraSettings.aspectRatio === 'free' ? 'w-full h-full' : ''}`}
+                  className={`overflow-hidden shadow-lg relative bg-[#D7D7D7] rounded-lg ${cameraSettings.aspectRatio === 'free' ? 'w-full h-full' : ''}`}
                   style={cameraSettings.aspectRatio !== 'free' ? {
                     aspectRatio: cameraSettings.aspectRatio.replace(':', '/'),
                     maxHeight: '100%',
@@ -1048,6 +1050,26 @@ const AppContent: React.FC = () => {
         state={state}
         measurements={measurements}
       />
+
+      {exportProgress !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center w-80 text-center">
+            <h3 className="text-xl font-bold text-black mb-4">Exporting Video</h3>
+            <div className="w-full h-3 bg-[#eee] rounded-full overflow-hidden mb-2">
+              <div 
+                className="h-full bg-[#FC3434] transition-all duration-300"
+                style={{ width: `${Math.round(exportProgress * 100)}%` }}
+              />
+            </div>
+            <p className="text-black/60 text-sm font-medium">
+              {Math.round(exportProgress * 100)}% Complete
+            </p>
+            <p className="text-black/40 text-xs mt-4">
+              Please do not close this tab or change windows.
+            </p>
+          </div>
+        </div>
+      )}
 
       <LoadSceneModal 
         isOpen={isLoadSceneModalOpen} 

@@ -1186,7 +1186,10 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
     },
     encodeOfflineVideo: async (width: number, height: number, fps: number, duration: number, kfs: CameraKeyframe[], onProgress: (p: number) => void, onTimeUpdate?: (t: number) => Promise<void>) => {
       if (!threeContext.current) throw new Error("No WebGL Context");
-      const { gl, scene, camera } = threeContext.current;
+      const { gl, scene, camera, set } = threeContext.current;
+
+      // Stop R3F's main render loop from fighting our manual renders
+      if (set) set({ frameloop: 'never' });
 
       const MuxerMod = await import('mp4-muxer');
       
@@ -1216,6 +1219,18 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
       const originalSize = new THREE.Vector2();
       gl.getSize(originalSize);
       const originalPixelRatio = gl.getPixelRatio();
+      
+      // Save canvas styles to prevent layout thrashing
+      const containerEl = containerRef.current;
+      const canvasEl = gl.domElement;
+      const originalCanvasStyle = canvasEl.getAttribute('style') || '';
+      
+      // Lock the canvas visual size to its previous dimensions
+      // so when we do gl.setSize(3840, 2160), it doesn't explode the layout
+      if (containerEl) {
+        const rect = containerEl.getBoundingClientRect();
+        canvasEl.style.cssText = `${originalCanvasStyle}; width: ${rect.width}px !important; height: ${rect.height}px !important; position: absolute !important; top: 0 !important; left: 0 !important;`;
+      }
       
       gl.setPixelRatio(1.0); 
       gl.setSize(width, height, false); 
@@ -1317,6 +1332,10 @@ export const ThreeDViewport = React.forwardRef<ThreeDViewportRef, ThreeDViewport
       } else {
           gl.render(scene, camera);
       }
+      
+      // Restore original canvas style and R3F frameloop
+      canvasEl.setAttribute('style', originalCanvasStyle);
+      if (set) set({ frameloop: 'always' });
 
       return new Blob([muxer.target.buffer], { type: 'video/mp4' });
     },

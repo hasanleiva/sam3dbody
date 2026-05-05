@@ -575,7 +575,7 @@ const AppContent: React.FC = () => {
       
       <main className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left Sidebar */}
-        <aside className="w-80 bg-[#f8f8f8] border-r border-[#eee] flex flex-col p-4 gap-6 overflow-y-auto no-scrollbar">
+        <aside className="w-80 flex-shrink-0 bg-[#f8f8f8] border-r border-[#eee] flex flex-col p-4 gap-6 overflow-y-auto no-scrollbar">
           {state.fullscreenView === '3d' ? (
             <AnalysisTools 
               selectedPerson={selectedPerson}
@@ -684,7 +684,7 @@ const AppContent: React.FC = () => {
         </aside>
 
         {/* Viewports Container */}
-        <div className="flex-1 flex flex-col min-h-0 bg-white">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-white">
           <SegmentStrip 
             people={state.detectedPeople} 
             selectedId={state.selectedId} 

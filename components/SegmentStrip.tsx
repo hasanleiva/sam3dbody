@@ -13,7 +13,8 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [availableTextures, setAvailableTextures] = useState<{name: string; path: string; team?: string}[]>([]);
   const [availableModels, setAvailableModels] = useState<{name: string; path: string; team: string; league: string}[]>([]);
-  const [personTeamFilters, setPersonTeamFilters] = useState<Record<string, string>>({});
+  const [personMeshTeamFilters, setPersonMeshTeamFilters] = useState<Record<string, string>>({});
+  const [personJerseyTeamFilters, setPersonJerseyTeamFilters] = useState<Record<string, string>>({});
   const [isModelsModalOpen, setIsModelsModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -179,22 +180,27 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
               {people.map(person => {
                 const currentModel = availableModels.find(m => m.path === person.bodyModelUrl);
                 const currentTexture = availableTextures.find(t => t.path === person.textureUrl);
-                const selectedTeam = personTeamFilters[person.id] !== undefined 
-                    ? personTeamFilters[person.id] 
-                    : (currentModel?.team && currentModel.team !== 'Unknown Team' && currentModel.team !== 'System' ? currentModel.team : (
-                        currentTexture?.team && currentTexture.team !== 'Unknown Team' && currentTexture.team !== 'System' ? currentTexture.team : ''
-                    ));
+                const selectedMeshTeam = personMeshTeamFilters[person.id] !== undefined 
+                    ? personMeshTeamFilters[person.id] 
+                    : (currentModel?.team && currentModel.team !== 'Unknown Team' && currentModel.team !== 'System' ? currentModel.team : '');
                 
-                const teamOptions = Array.from(new Set([
-                    ...availableModels.map(m => m.team).filter(team => team && team !== 'Unknown Team' && team !== 'System'),
+                const selectedJerseyTeam = personJerseyTeamFilters[person.id] !== undefined
+                    ? personJerseyTeamFilters[person.id]
+                    : (currentTexture?.team && currentTexture.team !== 'Unknown Team' && currentTexture.team !== 'System' ? currentTexture.team : '');
+                
+                const meshTeamOptions = Array.from(new Set([
+                    ...availableModels.map(m => m.team).filter(team => team && team !== 'Unknown Team' && team !== 'System')
+                ])).sort();
+
+                const jerseyTeamOptions = Array.from(new Set([
                     ...availableTextures.map(t => t.team || '').filter(team => team && team !== 'Unknown Team' && team !== 'System')
                 ])).sort();
                 
-                const modelsForTeam = availableModels.filter(m => m.team === selectedTeam);
-                const visibleModels = selectedTeam ? modelsForTeam : availableModels.filter(m => m.team !== 'Unknown Team' && m.team !== 'System');
+                const modelsForTeam = availableModels.filter(m => m.team === selectedMeshTeam);
+                const visibleModels = selectedMeshTeam ? modelsForTeam : availableModels.filter(m => m.team !== 'Unknown Team' && m.team !== 'System');
 
-                const texturesForTeam = availableTextures.filter(t => t.team === selectedTeam);
-                const visibleTextures = selectedTeam ? texturesForTeam : availableTextures.filter(t => t.team !== 'Unknown Team' && t.team !== 'System');
+                const texturesForTeam = availableTextures.filter(t => t.team === selectedJerseyTeam);
+                const visibleTextures = selectedJerseyTeam ? texturesForTeam : availableTextures.filter(t => t.team !== 'Unknown Team' && t.team !== 'System');
 
                 return (
                   <div key={person.id} className="flex flex-col sm:flex-row sm:items-start justify-between border-b border-[#f5f5f5] pb-4 last:border-0 last:pb-0 gap-3">
@@ -215,50 +221,67 @@ export const SegmentStrip: React.FC<SegmentStripProps> = ({ people, selectedId, 
                       </div>
                     </div>
                     <div className="flex flex-col gap-2 sm:items-end w-full sm:w-auto">
-                      <select
-                        className="text-xs font-medium border border-[#eee] rounded-md px-2 py-1.5 outline-none focus:border-[#FC3434] bg-[#f9f9f9] hover:bg-[#f5f5f5] cursor-pointer w-full sm:w-48 text-ellipsis transition-colors"
-                        value={selectedTeam}
-                        onChange={(e) => {
-                          setPersonTeamFilters(prev => ({ ...prev, [person.id]: e.target.value }));
-                        }}
-                      >
-                        <option value="">All Teams (Filter)</option>
-                        {teamOptions.map(team => (
-                          <option key={team} value={team}>{team}</option>
-                        ))}
-                      </select>
-                      <select
-                        className="text-sm border border-[#eee] rounded-md px-2 py-1.5 outline-none focus:border-[#FC3434] bg-white cursor-pointer w-full sm:w-48 text-ellipsis transition-colors"
-                        value={person.bodyModelUrl || ''}
-                        onChange={(e) => {
-                          if (onUpdatePerson) {
-                            onUpdatePerson(person.id, { bodyModelUrl: e.target.value || undefined });
-                          }
-                        }}
-                      >
-                        <option value="">Default Mesh Rig</option>
-                        {visibleModels.map(model => (
-                          <option key={model.path} value={model.path}>
-                            {!selectedTeam && model.team && model.team !== 'System' ? `${model.team} - ` : ''}{model.name}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        className="text-sm border border-[#eee] rounded-md px-2 py-1.5 outline-none focus:border-[#FC3434] bg-white cursor-pointer w-full sm:w-48 text-ellipsis transition-colors"
-                        value={person.textureUrl || ''}
-                        onChange={(e) => {
-                          if (onUpdatePerson) {
-                            onUpdatePerson(person.id, { textureUrl: e.target.value || undefined });
-                          }
-                        }}
-                      >
-                        <option value="">Default Jersey</option>
-                        {visibleTextures.map(texture => (
-                          <option key={texture.path} value={texture.path}>
-                            {!selectedTeam && texture.team && texture.team !== 'System' ? `${texture.team} - ` : ''}{texture.name}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex flex-col gap-1 w-full sm:w-48">
+                        <select
+                          className="text-xs font-medium border border-[#eee] rounded-md px-2 py-1.5 outline-none focus:border-[#FC3434] bg-[#f9f9f9] hover:bg-[#f5f5f5] cursor-pointer text-ellipsis transition-colors"
+                          value={selectedMeshTeam}
+                          onChange={(e) => {
+                            setPersonMeshTeamFilters(prev => ({ ...prev, [person.id]: e.target.value }));
+                          }}
+                        >
+                          <option value="">All Teams (Mesh Filter)</option>
+                          {meshTeamOptions.map(team => (
+                            <option key={team} value={team}>{team}</option>
+                          ))}
+                        </select>
+                        <select
+                          className="text-sm border border-[#eee] rounded-md px-2 py-1.5 outline-none focus:border-[#FC3434] bg-white cursor-pointer text-ellipsis transition-colors"
+                          value={person.bodyModelUrl || ''}
+                          onChange={(e) => {
+                            if (onUpdatePerson) {
+                              onUpdatePerson(person.id, { bodyModelUrl: e.target.value || undefined });
+                            }
+                          }}
+                        >
+                          <option value="">Default Mesh Rig</option>
+                          {visibleModels.map(model => (
+                            <option key={model.path} value={model.path}>
+                              {!selectedMeshTeam && model.team && model.team !== 'System' ? `${model.team} - ` : ''}{model.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex flex-col gap-1 w-full sm:w-48 mt-1">
+                        <select
+                          className="text-xs font-medium border border-[#eee] rounded-md px-2 py-1.5 outline-none focus:border-[#FC3434] bg-[#f9f9f9] hover:bg-[#f5f5f5] cursor-pointer text-ellipsis transition-colors"
+                          value={selectedJerseyTeam}
+                          onChange={(e) => {
+                            setPersonJerseyTeamFilters(prev => ({ ...prev, [person.id]: e.target.value }));
+                          }}
+                        >
+                          <option value="">All Teams (Jersey Filter)</option>
+                          {jerseyTeamOptions.map(team => (
+                            <option key={team} value={team}>{team}</option>
+                          ))}
+                        </select>
+                        <select
+                          className="text-sm border border-[#eee] rounded-md px-2 py-1.5 outline-none focus:border-[#FC3434] bg-white cursor-pointer text-ellipsis transition-colors"
+                          value={person.textureUrl || ''}
+                          onChange={(e) => {
+                            if (onUpdatePerson) {
+                              onUpdatePerson(person.id, { textureUrl: e.target.value || undefined });
+                            }
+                          }}
+                        >
+                          <option value="">Default Jersey</option>
+                          {visibleTextures.map(texture => (
+                            <option key={texture.path} value={texture.path}>
+                              {!selectedJerseyTeam && texture.team && texture.team !== 'System' ? `${texture.team} - ` : ''}{texture.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
                 );

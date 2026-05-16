@@ -87,4 +87,5 @@ export interface AppState {
   customNodes: PitchNode[];
   fullscreenView?: 'image' | '3d' | null;
   measurements?: DistanceMeasurement[];
+  billboards?: BillboardData[];
 }

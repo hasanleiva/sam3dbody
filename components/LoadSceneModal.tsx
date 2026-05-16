@@ -2,20 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 import { useAuth } from '../AuthContext';
-import { AppState, DistanceMeasurement } from '../types';
+import { AppState, DistanceMeasurement, BillboardData } from '../types';
 
 interface LoadSceneModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoad: (state: Partial<AppState>, measurements?: DistanceMeasurement[]) => void;
+  onLoad: (state: Partial<AppState>, measurements?: DistanceMeasurement[], billboards?: BillboardData[]) => void;
 }
 
 interface Scene {
   id: string;
   name: string;
   createdAt: any;
-  state: Partial<AppState> & { measurements?: string | DistanceMeasurement[] };
+  state: Partial<AppState> & { measurements?: string | DistanceMeasurement[], billboards?: string | BillboardData[] };
   measurements?: string | DistanceMeasurement[];
+  billboards?: string | BillboardData[];
 }
 
 export const LoadSceneModal: React.FC<LoadSceneModalProps> = ({ isOpen, onClose, onLoad }) => {
@@ -107,7 +108,22 @@ export const LoadSceneModal: React.FC<LoadSceneModalProps> = ({ isOpen, onClose,
                       parsedMeasurements = rawMeasurements;
                     }
                   }
-                  onLoad(scene.state, parsedMeasurements);
+
+                  let parsedBillboards: BillboardData[] | undefined = undefined;
+                  const rawBillboards = scene.billboards || scene.state.billboards;
+                  if (rawBillboards) {
+                    if (typeof rawBillboards === 'string') {
+                      try {
+                        parsedBillboards = JSON.parse(rawBillboards);
+                      } catch (e) {
+                        console.error('Failed to parse billboards', e);
+                      }
+                    } else {
+                      parsedBillboards = rawBillboards;
+                    }
+                  }
+
+                  onLoad(scene.state, parsedMeasurements, parsedBillboards);
                   onClose();
                 }}
                 className="bg-[#f8f8f8] border border-[#eee] p-4 rounded-xl hover:bg-[#f0f0f0] hover:border-[#ddd] transition-all cursor-pointer flex items-center justify-between group"

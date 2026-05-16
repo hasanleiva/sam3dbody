@@ -2,16 +2,17 @@ import React, { useState } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../AuthContext';
-import { AppState, DistanceMeasurement } from '../types';
+import { AppState, DistanceMeasurement, BillboardData } from '../types';
 
 interface SaveSceneModalProps {
   isOpen: boolean;
   onClose: () => void;
   state: AppState;
   measurements: DistanceMeasurement[];
+  billboards: BillboardData[];
 }
 
-export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose, state, measurements }) => {
+export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose, state, measurements, billboards }) => {
   const { user } = useAuth();
   const [sceneName, setSceneName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -63,7 +64,8 @@ export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose,
         homographyMatrix: state.homographyMatrix || null,
         detectedPeople: state.detectedPeople || [],
         customNodes: state.customNodes || [],
-        measurements: JSON.stringify(measurements)
+        measurements: JSON.stringify(measurements),
+        billboards: JSON.stringify(billboards)
       }));
 
       await addDoc(collection(db, 'users', user.uid, 'scenes'), {

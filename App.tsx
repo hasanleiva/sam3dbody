@@ -1049,6 +1049,7 @@ const AppContent: React.FC = () => {
         onClose={() => setIsSaveSceneModalOpen(false)} 
         state={state}
         measurements={measurements}
+        billboards={billboards}
       />
 
       {exportProgress !== null && (
@@ -1074,7 +1075,7 @@ const AppContent: React.FC = () => {
       <LoadSceneModal 
         isOpen={isLoadSceneModalOpen} 
         onClose={() => setIsLoadSceneModalOpen(false)} 
-        onLoad={(loadedState, loadedMeasurements) => {
+        onLoad={(loadedState, loadedMeasurements, loadedBillboards) => {
           setState(prev => ({
             ...prev,
             ...loadedState,
@@ -1093,6 +1094,13 @@ const AppContent: React.FC = () => {
           } else {
             setMeasurements([]);
             setActiveMeasurementId(null);
+          }
+          if (loadedBillboards) {
+            setBillboards(loadedBillboards);
+            setSelectedBillboardId(null);
+          } else {
+            setBillboards([]);
+            setSelectedBillboardId(null);
           }
           setActiveAnalysisTool(null);
           setOverlayEnabled(false);

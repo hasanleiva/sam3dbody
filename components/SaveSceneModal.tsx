@@ -37,7 +37,6 @@ export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose,
       // If the image is a base64 string, upload it to Cloudflare R2 via our backend
       if (imageUrl && imageUrl.startsWith('data:image')) {
         const token = await user.getIdToken();
-        // Use the current origin for the API URL since the backend is hosted on the same domain
         const apiUrl = window.location.origin;
         const response = await fetch(`${apiUrl}/api/upload-image`, {
           method: 'POST',
@@ -57,6 +56,31 @@ export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose,
         imageUrl = data.url;
       }
 
+      // Upload any billboard images that are base64 strings
+      const uploadedBillboards = await Promise.all(billboards.map(async (b) => {
+        if (b.url.startsWith('data:image')) {
+          const token = await user.getIdToken();
+          const apiUrl = window.location.origin;
+          const response = await fetch(`${apiUrl}/api/upload-image`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ image: b.url })
+          });
+
+          if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Failed to upload billboard image to R2');
+          }
+
+          const data = await response.json();
+          return { ...b, url: data.url };
+        }
+        return b;
+      }));
+
       const stateToSave = JSON.parse(JSON.stringify({
         image: imageUrl,
         imageDimensions: state.imageDimensions || null,
@@ -65,7 +89,7 @@ export const SaveSceneModal: React.FC<SaveSceneModalProps> = ({ isOpen, onClose,
         detectedPeople: state.detectedPeople || [],
         customNodes: state.customNodes || [],
         measurements: JSON.stringify(measurements),
-        billboards: JSON.stringify(billboards)
+        billboards: JSON.stringify(uploadedBillboards)
       }));
 
       await addDoc(collection(db, 'users', user.uid, 'scenes'), {
